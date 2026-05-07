@@ -21,8 +21,10 @@
   width: 100%;
   max-width: 400px;
   height: 100vh;
-  background: #0a0a0a;
-  border-left: 1px solid rgba(255,255,255,0.05);
+  background: rgba(10, 10, 10, 0.6); /* Transparente para el efecto difuminado */
+  backdrop-filter: blur(30px) saturate(1.5); /* Tono difuminado tipo cristal Apple */
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  border-left: 1px solid rgba(255,255,255,0.08);
   box-shadow: -15px 0 40px rgba(0,0,0,0.8);
   z-index: 101;
   display: flex;
@@ -35,7 +37,7 @@
 
 /* Encabezado */
 .settings-header {
-  padding: 30px 25px 20px;
+  padding: 60px 25px 20px; /* Bajamos el texto y la X (de 30px a 60px de margen superior) */
   display: flex;
   justify-content: space-between;
   align-items: center;

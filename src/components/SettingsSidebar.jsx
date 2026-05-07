@@ -29,19 +29,19 @@ export default function SettingsSidebar({ isOpen, onClose }) {
           <button className="close-btn" onClick={onClose}><X size={26} /></button>
         </div>
         
-        {/* Información del Usuario Estilo Spotify */}
-        <div className="settings-user-info">
-          <div className="user-avatar">
-            {user?.email?.charAt(0).toUpperCase() || 'M'}
-          </div>
-          <div className="user-details">
-            <span className="user-email">{user?.email}</span>
-            <span className="user-plan">Cuenta Cliente</span>
-          </div>
-        </div>
-
-        {/* CONTROLES */}
+        {/* CONTROLES (Lista deslizable completa) */}
         <div className="settings-content">
+          
+          {/* Información del Usuario Integrada al Scroll */}
+          <div className="settings-user-info">
+            <div className="user-avatar">
+              {user?.email?.charAt(0).toUpperCase() || 'M'}
+            </div>
+            <div className="user-details">
+              <span className="user-email">{user?.email}</span>
+              <span className="user-plan">Cuenta Cliente</span>
+            </div>
+          </div>
           
           <div className="settings-section">
             <h3>Reproducción</h3>
