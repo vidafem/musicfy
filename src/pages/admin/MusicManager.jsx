@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud, Music, Image as ImageIcon, Save, X, Loader2, Sparkles, CheckCircle } from 'lucide-react';
 import * as jsmediatags from 'jsmediatags';
+import { uploadToR2 } from '../../lib/cloudflareR2';
+import { supabase } from '../../supabaseClient';
 
 export default function MusicManager() {
   const [file, setFile] = useState(null);
@@ -79,19 +81,52 @@ export default function MusicManager() {
     setUploadStatus('uploading');
     
     try {
-      // AQUÍ IRÁ LA LÓGICA REAL:
-      // 1. Subir file a Cloudflare R2 (aws-sdk/client-s3)
-      // 2. Subir coverUrl a Cloudflare R2
-      // 3. Insertar registro en Supabase (título, artista, urls)
+      const timestamp = new Date().getTime();
+      const safeTitle = metadata.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       
-      // Simulamos la subida por ahora (esperando tus credenciales)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // 1. Subir MP3 a Cloudflare R2
+      const mp3Path = `music/${safeTitle}_${timestamp}.mp3`;
+      const mp3Url = await uploadToR2(file, mp3Path);
+      
+      let finalCoverUrl = null;
+      
+      // 2. Si hay carátula, convertir base64 a Blob y subir a Cloudflare R2
+      if (coverUrl && coverUrl.startsWith('data:image')) {
+        const arr = coverUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while(n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        const coverBlob = new Blob([u8arr], {type: mime});
+        
+        const coverPath = `covers/${safeTitle}_${timestamp}.jpg`;
+        finalCoverUrl = await uploadToR2(coverBlob, coverPath);
+      }
+
+      // 3. Guardar en Supabase Database
+      const { data, error } = await supabase
+        .from('songs')
+        .insert([
+          {
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
+            url: mp3Url,
+            cover_url: finalCoverUrl
+          }
+        ]);
+
+      if (error) throw error;
       
       setUploadStatus('success');
       setTimeout(() => {
-        handleCancel(); // Limpiar después del éxito
+        handleCancel(); // Limpiar el formulario
       }, 3000);
     } catch (error) {
+      console.error("Error en subida:", error);
       setUploadStatus('error');
     }
   };
