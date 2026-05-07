@@ -13,6 +13,7 @@ export default function PlayerBar() {
 
   const { 
     currentSong, 
+    queue,
     isPlaying, 
     togglePlay, 
     playNext, 
@@ -21,10 +22,17 @@ export default function PlayerBar() {
     currentTime,
     duration,
     setCurrentTime,
-    setDuration
+    setDuration,
+    fetchSongs,
+    playSong
   } = usePlayerStore();
 
   const audioRef = useRef(null);
+
+  // Cargar música real de la base de datos al iniciar
+  useEffect(() => {
+    fetchSongs();
+  }, []);
 
   // Lógica de inactividad (Idle) para el modo TV
   useEffect(() => {
@@ -117,10 +125,23 @@ export default function PlayerBar() {
 
   if (!currentSong) return null;
 
+  // Parsear letras (LRC o Texto plano)
+  const parsedLyrics = currentSong.lyrics ? currentSong.lyrics.split('\n').map(line => {
+    const timeMatch = line.match(/\[(\d+):(\d+\.\d+)\]/);
+    if (timeMatch) {
+      return { 
+        time: parseInt(timeMatch[1]) * 60 + parseFloat(timeMatch[2]), 
+        text: line.replace(/\[\d+:\d+\.\d+\]/, '').trim() 
+      };
+    }
+    return { time: 0, text: line.trim() };
+  }).filter(l => l.text) : [];
+
   return (
     <>
       {/* Elemento de audio oculto */}
       <audio 
+        key={currentSong.id} // Reiniciar audio al cambiar canción
         ref={audioRef} 
         src={currentSong.url} 
         onTimeUpdate={handleTimeUpdate}
@@ -142,7 +163,7 @@ export default function PlayerBar() {
         >
           <div className="mini-pill-content">
             <div className="mini-album">
-              <img src={currentSong.cover} alt="Portada" />
+              <img src={currentSong.cover_url} alt="Portada" />
               {isPlaying && <div className="mini-playing-indicator"><span className="bar"></span><span className="bar"></span><span className="bar"></span></div>}
             </div>
             <div className="mini-info">
@@ -158,8 +179,8 @@ export default function PlayerBar() {
           ================================== */}
       <div className={`fullscreen-tv-player ${isFullScreen ? 'open' : ''} ${isIdle ? 'is-idle' : ''} ${showLyrics ? 'lyrics-mode' : ''}`}>
         
-        {/* Fondo difuminado basado en el Artista o Portada */}
-        <div className="fs-bg" style={{ backgroundImage: `url(${currentSong.artistImage || currentSong.cover})` }}></div>
+        {/* Fondo difuminado basado en la Portada Original (como pidió el usuario) */}
+        <div className="fs-bg" style={{ backgroundImage: `url(${currentSong.cover_url})` }}></div>
         <div className="fs-overlay"></div>
 
         <button className="fs-close-btn" onClick={() => setIsFullScreen(false)}>
@@ -170,18 +191,22 @@ export default function PlayerBar() {
           
           <div className="fs-left-panel">
             <div className="fs-main-info">
-              <img src={currentSong.cover} alt="Portada" className="fs-cover" />
+              <div className="premium-cover-container">
+                <img src={currentSong.cover_url} alt="Portada" className="fs-cover animated-cover" />
+                <div className="shine-overlay"></div>
+              </div>
               <div className="fs-text">
                 <h1 className="fs-title">{currentSong.title}</h1>
                 <h2 className="fs-artist">{currentSong.artist}</h2>
+                {currentSong.genre && <span className="fs-genre-tag">{currentSong.genre}</span>}
               </div>
             </div>
           </div>
 
-          {currentSong.lyrics && (
+          {parsedLyrics.length > 0 && (
             <div className={`fs-right-panel fs-lyrics-container ${showLyrics ? 'visible' : ''}`} ref={lyricsContainerRef}>
-              {currentSong.lyrics.map((line, idx) => {
-                const isActive = currentTime >= line.time && (idx === currentSong.lyrics.length - 1 || currentTime < currentSong.lyrics[idx + 1].time);
+              {parsedLyrics.map((line, idx) => {
+                const isActive = currentTime >= line.time && (idx === parsedLyrics.length - 1 || currentTime < parsedLyrics[idx + 1].time);
                 return (
                   <p key={idx} className={`lyric-line ${isActive ? 'active' : ''}`}>
                     {line.text}
@@ -193,7 +218,7 @@ export default function PlayerBar() {
 
         </div>
 
-        {/* BARRA INFERIOR DE CONTROLES (Separada para que nunca se mueva a la derecha) */}
+        {/* BARRA INFERIOR DE CONTROLES */}
         <div className="fs-player-bottom">
           <div className="fs-progress-container">
             <span className="fs-time">{formatTime(currentTime)}</span>
@@ -251,25 +276,30 @@ export default function PlayerBar() {
         </div>
         
         {/* ==================================
-            SIDEBAR DE COLA DE REPRODUCCIÓN
+            SIDEBAR DE COLA DE REPRODUCCIÓN (Real)
             ================================== */}
         {showQueue && <div className="queue-overlay" onClick={(e) => { e.stopPropagation(); setShowQueue(false); }}></div>}
         <div className={`fs-queue-sidebar ${showQueue ? 'open' : ''}`}>
           <div className="queue-header">
-            <h3>A continuación</h3>
+            <h3>Librería Musicfy</h3>
             <button className="queue-close-btn" onClick={(e) => { e.stopPropagation(); setShowQueue(false); }}>
               <X size={28} />
             </button>
           </div>
           <div className="queue-list">
-            <div className="queue-item active">
-              <img src={currentSong.cover} alt="Cover" />
-              <div className="queue-info">
-                <h4>{currentSong.title}</h4>
-                <p>{currentSong.artist}</p>
+            {queue.map(song => (
+              <div 
+                key={song.id} 
+                className={`queue-item ${currentSong?.id === song.id ? 'active' : ''}`}
+                onClick={() => playSong(song)}
+              >
+                <img src={song.cover_url} alt="Cover" />
+                <div className="queue-info">
+                  <h4>{song.title}</h4>
+                  <p>{song.artist}</p>
+                </div>
               </div>
-            </div>
-            <p className="queue-placeholder">Tus canciones recomendadas aparecerán aquí.</p>
+            ))}
           </div>
         </div>
 

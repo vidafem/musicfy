@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { supabase } from '../supabaseClient';
 
 export const usePlayerStore = create((set, get) => ({
   currentSong: null,
@@ -9,6 +10,20 @@ export const usePlayerStore = create((set, get) => ({
   duration: 0,
   
   // Acciones
+  fetchSongs: async () => {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data.length > 0) {
+      set({ 
+        queue: data, 
+        currentSong: get().currentSong || data[0] // Cargar la primera si no hay ninguna
+      });
+    }
+  },
+
   playSong: (song) => set({ currentSong: song, isPlaying: true }),
   
   togglePlay: () => set((state) => ({ 

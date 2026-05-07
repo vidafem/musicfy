@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Settings, BarChart2 } from 'lucide-react';
 import SettingsSidebar from '../components/SettingsSidebar';
@@ -10,28 +10,11 @@ import './ClientLayout.css';
 export default function ClientLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
-  const playSong = usePlayerStore((state) => state.playSong);
+  const { queue, fetchSongs, playSong } = usePlayerStore();
 
-  const testSong = {
-    id: 1,
-    title: 'The Liquid Glass Experience',
-    artist: 'Antigravity AI',
-    cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400&auto=format&fit=crop',
-    artistImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop', // Imagen amplia del artista para el fondo
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', // Audio de prueba público
-    lyrics: [
-      { time: 0, text: "More than perfect" },
-      { time: 4, text: "you're unique" },
-      { time: 8, text: "You were born to be bold" },
-      { time: 12, text: "in this life" },
-      { time: 16, text: "Look out over to the west" },
-      { time: 20, text: "The sun is setting, time to rest" },
-      { time: 25, text: "Feel the rhythm in the night" },
-      { time: 30, text: "Everything will be alright" },
-      { time: 35, text: "Just let the liquid glass flow" },
-      { time: 40, text: "Take you where you need to go" }
-    ]
-  };
+  useEffect(() => {
+    fetchSongs();
+  }, [fetchSongs]);
 
   return (
     <div className="client-layout">
@@ -79,11 +62,11 @@ export default function ClientLayout() {
               <span>Inicio</span>
             </Link>
             <Link to="/search" className={`pill-icon-mobile ${location.pathname === '/search' ? 'active' : ''}`}>
-              <div className="icon-box"><Search size={22} strokeWidth={location.pathname === '/search' ? 2.5 : 2} /></div>
+              <div className="icon-box"><Search size={22} strokeWidth={location.pathname === '/' ? 2.5 : 2} /></div>
               <span>Buscar</span>
             </Link>
             <Link to="/library" className={`pill-icon-mobile ${location.pathname === '/library' ? 'active' : ''}`}>
-              <div className="icon-box"><Library size={22} strokeWidth={location.pathname === '/library' ? 2.5 : 2} /></div>
+              <div className="icon-box"><Library size={22} strokeWidth={location.pathname === '/' ? 2.5 : 2} /></div>
               <span>Biblioteca</span>
             </Link>
             <button onClick={() => setIsSettingsOpen(true)} className={`pill-icon-mobile btn-icon ${isSettingsOpen ? 'active' : ''}`}>
@@ -103,28 +86,39 @@ export default function ClientLayout() {
              <div className="home-container">
                 <div className="hero-background"></div>
                 <div className="content-scroll">
-                  <h1 className="section-title">Hecho para ti</h1>
-                  <h2 className="hero-title">Release Radar</h2>
-                  <p className="hero-subtitle">Atrapa toda la música más reciente de los artistas que sigues, además de nuevos sencillos elegidos para ti. Se actualiza todos los viernes.</p>
+                  <h1 className="section-title">Librería Principal</h1>
+                  <h2 className="hero-title">Tus canciones</h2>
+                  <p className="hero-subtitle">Música almacenada en la nube y gestionada por IA.</p>
                   
                   <div className="carousel">
-                    <div className="card highlight" onClick={() => playSong(testSong)}>
-                      <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400&auto=format&fit=crop" alt="Release" />
-                      <div className="card-info"><h4>Reproducir Demo</h4></div>
-                    </div>
-                    <div className="card"><img src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=400&auto=format&fit=crop" alt="Discover" /><div className="card-info"><h4>Discover Weekly</h4></div></div>
-                    <div className="card"><img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=400&auto=format&fit=crop" alt="Pop Mix" /><div className="card-info"><h4>Pop Mix</h4></div></div>
-                    <div className="card"><img src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400&auto=format&fit=crop" alt="Indie Mix" /><div className="card-info"><h4>Indie Mix</h4></div></div>
+                    {queue.map(song => (
+                      <div key={song.id} className="card highlight" onClick={() => playSong(song)}>
+                        <img src={song.cover_url} alt={song.title} />
+                        <div className="card-info">
+                          <h4>{song.title}</h4>
+                          <p>{song.artist}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {queue.length === 0 && (
+                      <div style={{ padding: '40px', background: 'rgba(255,255,255,0.05)', borderRadius: '20px', textAlign: 'center', width: '100%' }}>
+                        Sube música desde el panel de administrador para verla aquí.
+                      </div>
+                    )}
                   </div>
 
-                  <div className="content-row" style={{ marginTop: '50px' }}>
-                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 20px 5px' }}>Tu rotación intensa</h3>
-                    <div className="carousel">
-                      <div className="card"><img src="https://images.unsplash.com/photo-1493225457124-a1a2a5f5f924?q=80&w=400&auto=format&fit=crop" alt="Mix 1" /></div>
-                      <div className="card"><img src="https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=400&auto=format&fit=crop" alt="Mix 2" /></div>
-                      <div className="card"><img src="https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=400&auto=format&fit=crop" alt="Mix 3" /></div>
+                  {queue.length > 0 && (
+                    <div className="content-row" style={{ marginTop: '50px' }}>
+                      <h3 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 20px 5px' }}>Recientes</h3>
+                      <div className="carousel">
+                        {queue.slice(0, 3).map(song => (
+                          <div key={song.id} className="card" onClick={() => playSong(song)}>
+                            <img src={song.cover_url} alt={song.title} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
              </div>
            } />

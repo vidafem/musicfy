@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -17,8 +17,6 @@ const s3Client = new S3Client({
  */
 export const uploadToR2 = async (file, path) => {
   try {
-    // Convertimos el archivo a Uint8Array para máxima compatibilidad con el navegador
-    // Esto soluciona el error "readableStream.getReader is not a function"
     const arrayBuffer = await file.arrayBuffer();
     const fileBody = new Uint8Array(arrayBuffer);
 
@@ -31,11 +29,27 @@ export const uploadToR2 = async (file, path) => {
 
     await s3Client.send(command);
     
-    // Construimos la URL final usando tu dominio público de R2
     const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
     return `${publicUrl}/${path}`;
   } catch (error) {
     console.error("Error subiendo a R2:", error);
+    throw error;
+  }
+};
+
+/**
+ * Función para borrar archivos de Cloudflare R2
+ * @param {string} path - La ruta/llave del archivo (ej: 'music/archivo.mp3')
+ */
+export const deleteFromR2 = async (path) => {
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
+      Key: path,
+    });
+    await s3Client.send(command);
+  } catch (error) {
+    console.error("Error borrando de R2:", error);
     throw error;
   }
 };
