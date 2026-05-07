@@ -37,7 +37,10 @@
 }
 
 /* Cristal líquido sin destellos de click */
-.glass-pill-container { pointer-events: none; }
+.glass-pill-container { 
+  pointer-events: none; 
+  --glass-padding: 0px; /* MAGIA: Elimina el padding fantasma del shadow DOM que sobredimensionaba la píldora */
+}
 .glass-pill-container * { pointer-events: auto; }
 
 .tv-pill-content {
