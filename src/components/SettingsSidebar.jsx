@@ -107,21 +107,21 @@ export default function SettingsSidebar({ isOpen, onClose }) {
             </div>
           </div>
           
-        </div>
-
-        {/* BOTÓN DE CIERRE DE SESIÓN CON LIQUID GLASS */}
-        <div className="settings-footer">
-           <GlassButtonWrapper
-              radius="25"
-              depth="8"
-              blur="1"
-              strength="40"
-              background-color="rgba(255, 0, 0, 0.08)"
-              chromatic-aberration="3">
-              <button onClick={signOut} className="logout-glass-btn">
-                 <LogOut size={20} /> Cerrar Sesión
-              </button>
-           </GlassButtonWrapper>
+          {/* BOTÓN DE CIERRE DE SESIÓN MOVIDO ADENTRO DEL DESLIZABLE */}
+          <div className="settings-section" style={{ marginTop: '30px', display: 'flex', justifyContent: 'center' }}>
+             <GlassButtonWrapper
+                radius="25"
+                depth="8"
+                blur="1"
+                strength="40"
+                background-color="rgba(255, 0, 0, 0.08)"
+                chromatic-aberration="3">
+                <button onClick={signOut} className="logout-glass-btn" style={{ minWidth: '200px' }}>
+                   <LogOut size={20} /> Cerrar Sesión
+                </button>
+             </GlassButtonWrapper>
+          </div>
+          
         </div>
 
       </div>

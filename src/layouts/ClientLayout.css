@@ -25,7 +25,7 @@
 }
 
 .sidebar-top { margin-bottom: auto; pointer-events: auto; }
-.sidebar-logo { width: 35px; height: 35px; filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); }
+.sidebar-logo { width: auto; max-width: 50px; height: 35px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); }
 .sidebar-bottom { margin-top: auto; pointer-events: auto; }
 .now-playing-icon { color: #00ffff; animation: pulse 2s infinite; }
 

@@ -16,7 +16,7 @@ export default function ClientLayout() {
       <nav className="tv-sidebar">
         
         <div className="sidebar-top">
-          <img src="/icono.png" alt="Musicfy" className="sidebar-logo" />
+          <img src="/icon.png" alt="Musicfy" className="sidebar-logo" />
         </div>
         
         {/* PÍLDORA CENTRAL CON LIQUID GLASS (Envuelve directamente el contenido) */}
