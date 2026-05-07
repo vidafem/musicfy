@@ -1,0 +1,235 @@
+.login-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #000;
+}
+
+/* =========================================
+   GLOBAL HEADER (Animación del logo hacia la esquina)
+   ========================================= */
+.global-header {
+  position: absolute;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  transition: all 1s cubic-bezier(0.65, 0, 0.15, 1);
+}
+
+.app-logo { 
+  width: 50px; 
+  height: auto; 
+  transition: all 1s cubic-bezier(0.65, 0, 0.15, 1);
+}
+.app-name { 
+  width: 120px; 
+  height: auto; 
+}
+
+.global-header.center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.8);
+}
+.global-header.center .app-logo {
+  filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.2));
+}
+.global-header.center .app-name {
+  opacity: 0; 
+  width: 0;
+  overflow: hidden;
+}
+
+.global-header.gliding,
+.global-header.form-visible {
+  top: 40px;
+  left: 50px;
+  transform: translate(0, 0) scale(1);
+}
+.global-header.gliding .app-name,
+.global-header.form-visible .app-name {
+  opacity: 1;
+  width: 120px;
+  transition: opacity 1s ease 0.5s;
+}
+
+@media (max-width: 768px) {
+  .global-header.gliding,
+  .global-header.form-visible {
+    top: 20px;
+    left: 20px;
+  }
+}
+
+/* =========================================
+   LAYOUT DEL FORMULARIO CENTRADO
+   ========================================= */
+.login-center-layout {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  transition: all 0.8s ease;
+}
+
+.login-center-layout.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px);
+}
+
+.login-center-layout.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.login-content-full {
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+}
+
+.login-titles {
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.login-titles h1 {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: white;
+  letter-spacing: -1px;
+}
+
+.login-form-flat {
+  display: flex;
+  flex-direction: column;
+  gap: 25px; /* Ajustado por el nuevo bloque de error */
+}
+
+/* =========================================
+   INPUTS ESTILO PÍLDORA
+   ========================================= */
+.input-pill-container {
+  position: relative;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.input-pill-container label {
+  position: absolute;
+  top: -10px;
+  left: 30px;
+  background: #000;
+  padding: 0 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 10;
+  letter-spacing: 0.5px;
+}
+
+.input-pill-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.5);
+  z-index: 10;
+  pointer-events: none; /* Para no bloquear clicks */
+}
+
+.input-pill-wrapper input {
+  width: 100%;
+  background: #040404; 
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50px;
+  padding: 16px 50px 16px 55px; /* Padding derecho grande para el ojito */
+  color: white;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.input-pill-wrapper input:focus {
+  border-color: rgba(0, 255, 255, 0.5); 
+}
+
+/* Botón Ojo (Password Toggle) */
+.password-toggle {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+  padding: 5px;
+}
+
+.password-toggle:hover {
+  color: white;
+}
+
+.forgot-password {
+  text-align: right;
+  margin-top: -15px;
+  margin-bottom: 10px;
+}
+
+.forgot-password a {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.forgot-password a:hover {
+  color: white;
+}
+
+/* =========================================
+   ERRORES Y LOADING
+   ========================================= */
+.error-message {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.1);
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  text-align: center;
+  border: 1px solid rgba(255, 77, 79, 0.3);
+  margin-top: -10px;
+  box-shadow: 0 4px 15px rgba(255, 77, 79, 0.1);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,75 @@
+.liquid-btn-wrapper {
+  position: relative;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.btn-liquid {
+  position: relative;
+  width: 100%;
+  height: 60px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50px; /* Píldora */
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.btn-text {
+  position: relative;
+  z-index: 10;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* El contenedor del fondo líquido */
+.liquid-bg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  filter: url('#gooey');
+}
+
+.liquid-base {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(255, 255, 255, 0.1); /* Color base del cristal */
+  backdrop-filter: blur(10px);
+}
+
+.liquid-blob {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  opacity: 0;
+}
+
+.drop-1 { left: -20px; }
+.drop-2 { right: -20px; }
+
+/* Animación Liquid Glass al pasar el ratón */
+.btn-liquid:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+.btn-liquid:hover .liquid-blob {
+  opacity: 1;
+  /* Se expanden hacia el centro fundiéndose como mercurio */
+  transform: translateY(-50%) scale(4);
+}
+.btn-liquid:hover .drop-1 { left: 30%; }
+.btn-liquid:hover .drop-2 { right: 30%; }

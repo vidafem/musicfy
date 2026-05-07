@@ -1,0 +1,21 @@
+{
+  "name": "Musicfy",
+  "short_name": "Musicfy",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "description": "Tu reproductor de música con inteligencia artificial",
+  "icons": [
+    {
+      "src": "/icono.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icono.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
