@@ -1,55 +1,89 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut } from 'lucide-react';
+import MusicManager from '../pages/admin/MusicManager';
+import './AdminLayout.css';
 
-/**
- * ADMIN LAYOUT
- * Este será tu panel privado para subir música y administrar la app.
- */
 export default function AdminLayout() {
   const { signOut, user } = useAuthStore();
+  const location = useLocation();
+
+  // Función para obtener el título según la ruta actual
+  const getPageTitle = () => {
+    const path = location.pathname;
+    if (path === '/admin') return 'Dashboard General';
+    if (path.includes('/admin/music')) return 'Gestión de Música e IA';
+    if (path.includes('/admin/users')) return 'Gestión de Usuarios';
+    if (path.includes('/admin/media')) return 'Librería Multimedia';
+    if (path.includes('/admin/settings')) return 'Configuraciones';
+    return 'Panel de Control';
+  };
 
   return (
-    <div style={{ color: 'white', backgroundColor: '#050505', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="admin-container">
       
-      {/* HEADER DE ADMIN */}
-      <header style={{ padding: '20px', borderBottom: '1px solid rgba(0,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,255,255,0.02)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src="/icono.png" alt="Musicfy" style={{ width: '30px', filter: 'hue-rotate(90deg)' }} />
-            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600, color: '#00ffff' }}>Panel de Control (Admin)</h2>
+      {/* SIDEBAR */}
+      <aside className="admin-sidebar">
+        <div className="admin-logo">
+          <img src="/icono.png" alt="Musicfy" />
+          <h2>Musicfy<span>Admin</span></h2>
         </div>
+
+        <nav className="admin-nav">
+          <NavLink to="/admin" end className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <LayoutDashboard size={20} /> Dashboard
+          </NavLink>
+          <NavLink to="/admin/music" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <Music size={20} /> Librería Musical
+          </NavLink>
+          <NavLink to="/admin/media" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <ImagePlay size={20} /> Media & Fondos
+          </NavLink>
+          <NavLink to="/admin/users" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <Users size={20} /> Usuarios
+          </NavLink>
+          <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <Settings size={20} /> Ajustes Generales
+          </NavLink>
+        </nav>
+
+        <div className="admin-user-card">
+          <div className="admin-user-info">
+            <span className="role">Administrador</span>
+            <span className="email">{user?.email || 'admin@musicfy.com'}</span>
+          </div>
+          <button className="admin-logout-btn" onClick={signOut} title="Cerrar Sesión">
+            <LogOut size={20} />
+          </button>
+        </div>
+      </aside>
+
+      {/* ÁREA PRINCIPAL */}
+      <main className="admin-main-content">
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-           <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>{user.email}</span>
-           
-           <button 
-             onClick={signOut} 
-             style={{ 
-                 background: 'rgba(255,0,0,0.1)', 
-                 color: '#ff4d4f', 
-                 border: '1px solid rgba(255,0,0,0.3)',
-                 padding: '8px 16px',
-                 borderRadius: '20px',
-                 cursor: 'pointer',
-                 fontWeight: 'bold'
-             }}
-           >
-             Cerrar Sesión
-           </button>
+        {/* TOPBAR */}
+        <header className="admin-topbar">
+          <h1>{getPageTitle()}</h1>
+        </header>
+        
+        {/* ZONA DE VISTAS (RUTAS) */}
+        <div className="admin-content-area">
+          <Routes>
+             <Route path="/" element={
+               <div>
+                 <h2 style={{ fontSize: '2rem', marginBottom: '20px' }}>Bienvenido de nuevo</h2>
+                 <p style={{ color: 'rgba(255,255,255,0.6)' }}>Este es tu panel de control central. Selecciona una opción del menú lateral para comenzar.</p>
+               </div>
+             } />
+             <Route path="/music" element={<MusicManager />} />
+             <Route path="/media" element={<div>Gestión de Multimedia en construcción...</div>} />
+             <Route path="/users" element={<div>Gestión de Usuarios en construcción...</div>} />
+             <Route path="/settings" element={<div>Ajustes en construcción...</div>} />
+          </Routes>
         </div>
-      </header>
-      
-      {/* ZONA DE ADMINISTRACIÓN */}
-      <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
-        <Routes>
-           <Route path="/" element={
-             <div>
-                <h1 style={{ fontSize: '2.5rem', marginBottom: '10px' }}>Gestión de Música</h1>
-                <p style={{ color: 'rgba(255,255,255,0.5)' }}>Desde aquí subiremos archivos MP3 a Supabase Storage y obtendremos carátulas gratis de IMDb/MusicBrainz.</p>
-             </div>
-           } />
-        </Routes>
-      </div>
+
+      </main>
     </div>
   );
 }

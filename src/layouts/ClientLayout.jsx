@@ -2,12 +2,36 @@ import React, { useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Settings, BarChart2 } from 'lucide-react';
 import SettingsSidebar from '../components/SettingsSidebar';
+import PlayerBar from '../components/PlayerBar';
 import GlassButtonWrapper from '../components/ui/GlassButtonWrapper';
+import { usePlayerStore } from '../store/usePlayerStore';
 import './ClientLayout.css';
 
 export default function ClientLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
+  const playSong = usePlayerStore((state) => state.playSong);
+
+  const testSong = {
+    id: 1,
+    title: 'The Liquid Glass Experience',
+    artist: 'Antigravity AI',
+    cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400&auto=format&fit=crop',
+    artistImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop', // Imagen amplia del artista para el fondo
+    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', // Audio de prueba público
+    lyrics: [
+      { time: 0, text: "More than perfect" },
+      { time: 4, text: "you're unique" },
+      { time: 8, text: "You were born to be bold" },
+      { time: 12, text: "in this life" },
+      { time: 16, text: "Look out over to the west" },
+      { time: 20, text: "The sun is setting, time to rest" },
+      { time: 25, text: "Feel the rhythm in the night" },
+      { time: 30, text: "Everything will be alright" },
+      { time: 35, text: "Just let the liquid glass flow" },
+      { time: 40, text: "Take you where you need to go" }
+    ]
+  };
 
   return (
     <div className="client-layout">
@@ -70,6 +94,7 @@ export default function ClientLayout() {
         </GlassButtonWrapper>
       </div>
 
+      <PlayerBar />
       <SettingsSidebar isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       <main className="main-content">
@@ -83,7 +108,10 @@ export default function ClientLayout() {
                   <p className="hero-subtitle">Atrapa toda la música más reciente de los artistas que sigues, además de nuevos sencillos elegidos para ti. Se actualiza todos los viernes.</p>
                   
                   <div className="carousel">
-                    <div className="card highlight"><img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400&auto=format&fit=crop" alt="Release" /><div className="card-info"><h4>Release Radar</h4></div></div>
+                    <div className="card highlight" onClick={() => playSong(testSong)}>
+                      <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400&auto=format&fit=crop" alt="Release" />
+                      <div className="card-info"><h4>Reproducir Demo</h4></div>
+                    </div>
                     <div className="card"><img src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=400&auto=format&fit=crop" alt="Discover" /><div className="card-info"><h4>Discover Weekly</h4></div></div>
                     <div className="card"><img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=400&auto=format&fit=crop" alt="Pop Mix" /><div className="card-info"><h4>Pop Mix</h4></div></div>
                     <div className="card"><img src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400&auto=format&fit=crop" alt="Indie Mix" /><div className="card-info"><h4>Indie Mix</h4></div></div>

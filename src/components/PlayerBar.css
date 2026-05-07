@@ -1,0 +1,547 @@
+/* ==================================
+   MINI PÍLDORA (PREVIA)
+   ================================== */
+   .mini-player-pill-container {
+    position: fixed;
+    bottom: 30px;
+    left: 140px; /* A la derecha del sidebar TV */
+    z-index: 90;
+    cursor: pointer;
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
+  }
+  
+  .mini-player-pill-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px);
+  }
+  
+  .mini-player-pill-container:hover {
+    transform: scale(1.05);
+  }
+  
+  .mini-pill-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 20px 8px 8px;
+  }
+  
+  .mini-album {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  }
+  
+  .mini-album img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: spin 10s linear infinite;
+  }
+  
+  /* Indicador de que está sonando (barritas) */
+  .mini-playing-indicator {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .bar { width: 3px; height: 10px; background: #00ffff; animation: bounce 1s infinite alternate; }
+  .bar:nth-child(2) { animation-delay: 0.2s; }
+  .bar:nth-child(3) { animation-delay: 0.4s; }
+  
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  @keyframes bounce { 0% { height: 4px; } 100% { height: 16px; } }
+  
+  .mini-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .mini-title { color: white; font-weight: 700; font-size: 0.95rem; }
+  .mini-artist { color: rgba(255,255,255,0.6); font-size: 0.8rem; }
+  
+  /* ==================================
+     FULLSCREEN TV PLAYER (TIPO SPOTIFY TV)
+     ================================== */
+  .fullscreen-tv-player {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 200; /* Sobre todo */
+    display: flex;
+    flex-direction: column;
+    padding: 60px 10%; /* Aplicamos el padding global al contenedor padre */
+    box-sizing: border-box; /* CRUCIAL: evita que el padding empuje elementos fuera de la pantalla */
+    overflow: hidden; /* Evita que contenido largo rompa la pantalla */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  
+  .fullscreen-tv-player.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  /* Fondos */
+  .fs-bg {
+    position: absolute;
+    top: -10%; left: -10%; right: -10%; bottom: -10%; /* Márgenes más amplios para esconder bordes difuminados */
+    background-size: cover;
+    background-position: center;
+    filter: blur(0px) brightness(0.6); /* Sin difuminar por defecto */
+    z-index: 1;
+    transform: scale(1.2); /* Siempre escalado para evitar saltos y esconder bordes */
+    transition: filter 0.8s cubic-bezier(0.25, 1, 0.5, 1); /* Solo animamos filter */
+  }
+  
+  .fullscreen-tv-player.lyrics-mode .fs-bg {
+    filter: blur(40px) brightness(0.3); /* Difuminado intenso en modo letra */
+  }
+  
+  .fs-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 100%);
+    z-index: 2;
+  }
+  
+  /* Botón de cierre */
+  .fs-close-btn {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.2s, color 0.2s;
+  }
+  .fs-close-btn:hover { color: white; transform: scale(1.2); }
+  
+  /* Contenido Principal */
+  .fs-content-wrapper {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    min-height: 0; /* CRUCIAL: previene que flexbox se desborde si el contenido es grande */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .fs-left-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 100%;
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  /* Portada y Título (Izquierda) */
+  .fs-main-info {
+    position: relative;
+    width: 100%;
+    height: 180px; /* ALTURA FIJA ETERNA */
+    margin-bottom: 50px; /* MARGEN FIJO ETERNO */
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  .fs-cover {
+    position: absolute;
+    bottom: 0; /* Anclado al piso de la caja en modo normal */
+    left: 0;
+    width: 180px;
+    height: 180px;
+    border-radius: 15px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    object-fit: cover;
+    transform-origin: bottom left;
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  @keyframes textHideAndShow {
+    0% { opacity: 1; }
+    15% { opacity: 0; } /* Se apaga rápido pero suave (fade-out) */
+    85% { opacity: 0; } /* Se mantiene invisible mientras viaja */
+    100% { opacity: 1; } /* Se enciende rápido pero suave (fade-in) */
+  }
+
+  .fs-text {
+    position: absolute;
+    bottom: 20px; /* Anclado al piso, alineado a la derecha */
+    left: 220px; 
+    width: calc(100% - 230px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 10px;
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  .fs-title {
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin: 0;
+    color: white;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    letter-spacing: -1px;
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  .fs-artist {
+    font-size: 1.3rem;
+    font-weight: 500;
+    margin: 0;
+    color: rgba(255,255,255,0.7);
+    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  /* Barra Inferior (Progreso y Controles) */
+  .fs-player-bottom {
+    position: relative;
+    z-index: 10; /* Siempre encima de overlays y contenidos */
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  
+  /* ==================================
+     ESTADOS DE INACTIVIDAD (IDLE) TV
+     ================================== */
+  .fullscreen-tv-player.is-idle .fs-close-btn {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  .fullscreen-tv-player.is-idle .fs-player-bottom {
+    opacity: 0;
+    transform: translateY(60px);
+    pointer-events: none;
+  }
+  
+  /* --- Magia cuando se oculta la barra (Modo Inactivo / is-idle) --- */
+  
+  /* En Modo Normal */
+  .fullscreen-tv-player.is-idle:not(.lyrics-mode) .fs-cover {
+    bottom: -110px; /* Baja hasta la parte baja de la pantalla al desaparecer los controles */
+  }
+
+  .fullscreen-tv-player.is-idle:not(.lyrics-mode) .fs-text {
+    /* Mantiene left: 220px, solo baja la misma cantidad que la portada */
+    bottom: -90px; 
+  }
+
+  /* En Modo Letras */
+  .fullscreen-tv-player.is-idle.lyrics-mode .fs-cover {
+    bottom: 20px; /* Baja 30px (de 50 a 20) */
+  }
+
+  .fullscreen-tv-player.is-idle.lyrics-mode .fs-text {
+    bottom: -90px; /* Baja 30px (de -60 a -90) */
+  }
+  
+  .fs-progress-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+  }
+  
+  .fs-time {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.9rem;
+    font-weight: 500;
+    min-width: 45px;
+  }
+  
+  .fs-progress-bar {
+    flex: 1;
+    -webkit-appearance: none;
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+    height: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .fs-progress-bar:hover { background: rgba(255,255,255,0.3); }
+  
+  .fs-progress-bar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  }
+  
+  /* Controles Inferiores (Izquierda, Centro, Derecha) */
+  .fs-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 5px;
+  }
+
+  .fs-controls-side { width: 33.3%; display: flex; align-items: center; gap: 20px; }
+  .fs-controls-side.right-side { justify-content: flex-end; }
+  
+  .fs-controls {
+    width: 33.3%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+  }
+
+  .fs-icon-btn {
+    background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fs-icon-btn:hover, .fs-icon-btn.active { color: white; transform: scale(1.1); }
+  .fs-icon-btn.active { filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)); }
+  
+  .fs-ctrl-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .fs-ctrl-btn.secondary { color: rgba(255,255,255,0.4); }
+  .fs-ctrl-btn.secondary:hover { color: white; transform: scale(1.1); }
+  
+  .fs-ctrl-btn.primary { color: rgba(255,255,255,0.8); }
+  .fs-ctrl-btn.primary:hover { color: white; transform: scale(1.1); }
+  
+  .fs-play-pause {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background-color: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  .fs-play-pause:hover {
+    transform: scale(1.05);
+    background-color: #00ffff;
+  }
+
+  /* ==================================
+     KARAOKE / LYRICS MODE (TV)
+     ================================== */
+  .fullscreen-tv-player.lyrics-mode .fs-bg {
+    filter: blur(60px) brightness(0.3) saturate(1.8);
+    /* Se eliminó el scale(1.2) para evitar el salto brusco, ya que el contenedor base usa transform: scale(1.1) */
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-content-wrapper {
+    flex-direction: row;
+    align-items: flex-end; /* Mantener anclado abajo, NO 'center', para evitar que se levante todo */
+    justify-content: space-between;
+    gap: 10%;
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-left-panel {
+    width: 45%;
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-main-info {
+    height: 180px; /* NUNCA CAMBIA LA ALTURA */
+    margin-bottom: 50px; /* NUNCA CAMBIA EL MARGEN */
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-cover {
+    bottom: 50px; /* Sube un poco, llegando justo a la mitad de la pantalla */
+    width: 280px; /* Más grande, proporcional a la subida */
+    height: 280px;
+    transition: all 0.7s cubic-bezier(0.25, 1, 0.5, 1); /* Sincronizado con el React State */
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-text {
+    bottom: -20px; /* Se eleva 40px para no sobreponerse a la barra de progreso */
+    left: 0;
+    width: 100%;
+    animation: textHideAndShow 1s cubic-bezier(0.25, 1, 0.5, 1) forwards; /* 1 segundo de coreografía exacta */
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-title {
+    font-size: 1.9rem;
+    line-height: 1.2;
+  }
+
+  .fullscreen-tv-player.lyrics-mode .fs-artist {
+    font-size: 1.1rem;
+  }
+
+  /* Panel Derecho: Letras */
+  .fs-right-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 25vh; /* Espacio superior para que la primera letra quede al medio */
+    padding-bottom: 25vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    pointer-events: none; /* Desactiva el scroll manual */
+    mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+    
+    /* Estado Oculto por defecto */
+    opacity: 0;
+    transform: translateY(100px); /* Viene desde abajo */
+    transition: all 0.4s ease 0s; /* Rápido y directo al salir */
+  }
+
+  .fs-right-panel.visible {
+    opacity: 1;
+    transform: translateY(0); /* Se desliza suavemente a su posición final */
+    transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1) 0.3s; /* Aparece DESPUÉS de que la imagen empieza a crecer */
+  }
+  
+  .fs-right-panel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .lyric-line {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1.4;
+    color: rgba(255,255,255,0.3); /* Letra apagada y desenfocada */
+    margin: 10px 0;
+    transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    filter: blur(2px);
+    transform: scale(0.95);
+    transform-origin: left;
+    letter-spacing: -1px;
+  }
+
+  .lyric-line.active {
+    color: white;
+    filter: blur(0px);
+    transform: scale(1);
+    text-shadow: 0 4px 30px rgba(255,255,255,0.5);
+  }
+
+  /* ==================================
+     COLA DE REPRODUCCIÓN (PLAYLIST TV)
+     ================================== */
+  .queue-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 90; /* Debajo del sidebar pero encima de todo lo demás */
+    background: transparent;
+  }
+
+  .fs-queue-sidebar {
+    position: absolute;
+    top: 0; right: -400px;
+    width: 350px;
+    height: 100vh;
+    background: rgba(15, 15, 20, 0.4); /* Más transparente para el Liquid Glass */
+    backdrop-filter: blur(40px) saturate(1.5);
+    -webkit-backdrop-filter: blur(40px) saturate(1.5);
+    z-index: 100;
+    transition: right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    padding: 60px 30px;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+  }
+
+  .fs-queue-sidebar.open {
+    right: 0;
+  }
+
+  .queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .queue-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  .queue-close-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+    padding: 0;
+  }
+
+  .queue-close-btn:hover {
+    color: white;
+    transform: scale(1.1);
+  }
+
+  .queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+
+  .queue-item:hover { background: rgba(255,255,255,0.1); }
+  .queue-item.active { background: rgba(255,255,255,0.15); }
+
+  .queue-item img {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .queue-info h4 { margin: 0; font-size: 0.95rem; color: white; }
+  .queue-info p { margin: 4px 0 0 0; font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+
+  .queue-placeholder {
+    margin-top: 20px;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.4);
+    text-align: center;
+    line-height: 1.5;
+  }
