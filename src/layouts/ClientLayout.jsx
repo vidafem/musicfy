@@ -5,6 +5,7 @@ import SettingsSidebar from '../components/SettingsSidebar';
 import PlayerBar from '../components/PlayerBar';
 import GlassButtonWrapper from '../components/ui/GlassButtonWrapper';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import LibraryPage from '../pages/client/Library';
 import GlobalSearch from '../pages/client/GlobalSearch';
 import SearchPage from '../pages/client/Search';
@@ -14,6 +15,20 @@ export default function ClientLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
   const { queue, fetchSongs, playSong } = usePlayerStore();
+  const { accentColor, accentOpacity } = useSettingsStore();
+
+  // APLICAR TEMA DINÁMICO
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--accent-color', accentColor);
+    root.style.setProperty('--accent-opacity', accentOpacity);
+    
+    // Generar el resplandor (glow) dinámico
+    const r = parseInt(accentColor.slice(1, 3), 16);
+    const g = parseInt(accentColor.slice(3, 5), 16);
+    const b = parseInt(accentColor.slice(5, 7), 16);
+    root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.5)`);
+  }, [accentColor, accentOpacity]);
 
   useEffect(() => {
     fetchSongs();

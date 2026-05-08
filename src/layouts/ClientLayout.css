@@ -82,9 +82,9 @@
 }
 .pill-icon:hover { color: white; }
 .pill-icon.active {
-  color: white;
-  background-color: rgba(0,0,0,0.5); 
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+  color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.05); 
+  box-shadow: 0 0 15px var(--accent-glow);
 }
 
 .btn-icon { background: transparent; border: none; cursor: pointer; outline: none; }
@@ -144,10 +144,10 @@
     transition: background 0.3s;
   }
 
-  .pill-icon-mobile.active { color: white; }
+  .pill-icon-mobile.active { color: var(--accent-color); }
   .pill-icon-mobile.active .icon-box {
-    background-color: rgba(0,0,0,0.6);
-    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 10px var(--accent-glow);
   }
 }
 

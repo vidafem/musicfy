@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, Sliders, Trash2, LogOut, Disc3 } from 'lucide-react';
+import { X, Settings, Sliders, Trash2, LogOut, Disc3, Palette } from 'lucide-react';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import GlassButtonWrapper from './ui/GlassButtonWrapper';
@@ -11,6 +11,8 @@ export default function SettingsSidebar({ isOpen, onClose }) {
     crossfadeEnabled, toggleCrossfade,
     crossfadeTime, setCrossfadeTime,
     equalizerEnabled, toggleEqualizer,
+    accentColor, setAccentColor,
+    accentOpacity, setAccentOpacity,
     clearCache
   } = useSettingsStore();
   
@@ -95,6 +97,35 @@ export default function SettingsSidebar({ isOpen, onClose }) {
                 <input type="checkbox" checked={equalizerEnabled} onChange={toggleEqualizer} />
                 <span className="slider round"></span>
               </label>
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h3>Personalización (Tema)</h3>
+            <div className="setting-item">
+               <div className="setting-info">
+                 <span><Palette size={18}/> Color Neón del Sistema</span>
+                 <p>Personaliza el color de acento, botones e iconos de la app.</p>
+               </div>
+               <input 
+                 type="color" 
+                 value={accentColor} 
+                 onChange={(e) => setAccentColor(e.target.value)}
+                 className="theme-color-input"
+               />
+            </div>
+
+            <div className="setting-item sub-item">
+               <span>Opacidad del Sistema: {Math.round(accentOpacity * 100)}%</span>
+               <input 
+                 type="range" 
+                 min="0.3" 
+                 max="1" 
+                 step="0.05"
+                 value={accentOpacity} 
+                 onChange={(e) => setAccentOpacity(parseFloat(e.target.value))}
+                 style={{ width: '100%', marginTop: '10px' }}
+               />
             </div>
           </div>
 

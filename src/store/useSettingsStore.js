@@ -5,19 +5,23 @@ import { persist } from 'zustand/middleware';
 // se guarde automáticamente en el disco local (localStorage) de cada dispositivo.
 export const useSettingsStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       // ESTADOS POR DEFECTO
       animatedCovers: true,
       crossfadeEnabled: false,
       crossfadeTime: 10,
       equalizerEnabled: false,
       likedSongs: [], // Array de IDs de canciones marcadas con ❤️
+      accentColor: '#00ffff', // Color de neón por defecto
+      accentOpacity: 1,      // Opacidad del sistema
 
       // ACCIONES PARA MODIFICAR ESTADOS
       toggleAnimatedCovers: () => set((state) => ({ animatedCovers: !state.animatedCovers })),
       toggleCrossfade: () => set((state) => ({ crossfadeEnabled: !state.crossfadeEnabled })),
       setCrossfadeTime: (time) => set({ crossfadeTime: Math.min(20, time) }),
       toggleEqualizer: () => set((state) => ({ equalizerEnabled: !state.equalizerEnabled })),
+      setAccentColor: (color) => set({ accentColor: color }),
+      setAccentOpacity: (opacity) => set({ accentOpacity: opacity }),
 
       // Agregar o quitar una canción de Me Gusta (guarda solo el ID)
       toggleLike: (songId, songData = null) => {

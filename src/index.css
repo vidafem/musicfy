@@ -3,6 +3,11 @@
   --glass-bg: rgba(20, 20, 20, 0.4);
   --glass-border: rgba(255, 255, 255, 0.12);
   --text-primary: #ffffff;
+  
+  /* Variables Dinámicas (Cambiables por el usuario) */
+  --accent-color: #00ffff;
+  --accent-glow: rgba(0, 255, 255, 0.5);
+  --accent-opacity: 1;
 }
 
 * {

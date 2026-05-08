@@ -14,6 +14,7 @@ import { supabase } from '../../supabaseClient';
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     totalSongs: 0,
+    totalArtists: 0,
     onlineUsers: 0,
     topSongs: []
   });
@@ -31,9 +32,13 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     // 1. Obtener total de canciones
-    const { count } = await supabase.from('songs').select('*', { count: 'exact', head: true });
+    const { count: songCount } = await supabase.from('songs').select('*', { count: 'exact', head: true });
     
-    // 2. Obtener canciones más escuchadas (requiere columna play_count)
+    // 2. Obtener total de artistas únicos
+    const { data: artistsData } = await supabase.from('songs').select('artist');
+    const uniqueArtists = new Set(artistsData?.map(s => s.artist)).size;
+
+    // 3. Obtener canciones más escuchadas (play_count)
     const { data: topSongs } = await supabase
       .from('songs')
       .select('title, artist, cover_url, play_count')
@@ -41,8 +46,9 @@ export default function AdminDashboard() {
       .limit(5);
 
     setStats({
-      totalSongs: count || 0,
-      onlineUsers: Math.floor(Math.random() * 10) + 1, // Mock por ahora
+      totalSongs: songCount || 0,
+      totalArtists: uniqueArtists || 0,
+      onlineUsers: Math.floor(Math.random() * 5) + 1, // Mock de presencia básica
       topSongs: topSongs || []
     });
   };
@@ -81,14 +87,14 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <p style={labelStyle}>Actividad Hoy</p>
-              <h3 style={valueStyle}>+245</h3>
+              <p style={labelStyle}>Artistas en Catálogo</p>
+              <h3 style={valueStyle}>{stats.totalArtists}</h3>
             </div>
             <div style={{ ...iconBoxStyle, background: 'rgba(255,200,0,0.1)', color: '#ffc800' }}>
               <TrendingUp size={24} />
             </div>
           </div>
-          <p style={{ color: '#ffc800', fontSize: '0.8rem', margin: '10px 0 0 0' }}>↑ 12% más que ayer</p>
+          <p style={{ color: '#ffc800', fontSize: '0.8rem', margin: '10px 0 0 0' }}>↑ Diversidad musical</p>
         </div>
       </div>
 

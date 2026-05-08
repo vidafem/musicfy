@@ -4,6 +4,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import GlassButtonWrapper from './ui/GlassButtonWrapper';
 import './PlayerBar.css';
+import './PlayerError.css';
 
 export default function PlayerBar() {
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -39,6 +40,7 @@ export default function PlayerBar() {
   const [activeChannel, setActiveChannel] = useState('A'); // 'A' o 'B'
   const [nextSongInfo, setNextSongInfo] = useState(null);
   const [uiTransition, setUiTransition] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
   
   const audioARef = useRef(null);
   const audioBRef = useRef(null);
@@ -186,6 +188,23 @@ export default function PlayerBar() {
     }
   };
 
+  const handleAudioError = (e) => {
+    const audio = e.target;
+    
+    // FILTRO ROBUSTO: Solo mostrar error si hay un src real que NO sea el del sitio actual
+    // y si la canción actual existe. Esto evita el error al limpiar canales del mixer.
+    const currentUrl = window.location.origin + '/';
+    if (!audio.getAttribute('src') || audio.src === currentUrl || audio.src === window.location.href) {
+      return;
+    }
+    
+    console.error("Error real cargando audio:", audio.src);
+    setErrorMessage("Error de conexión: No se pudo cargar la música.");
+    
+    if (isPlaying) setIsMixingSync(false);
+    setTimeout(() => setErrorMessage(null), 6000);
+  };
+
   // Cargar música real de la base de datos al iniciar
   useEffect(() => {
     fetchSongs();
@@ -287,6 +306,7 @@ export default function PlayerBar() {
         ref={audioARef} 
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleLoadedMetadata}
+        onError={handleAudioError}
         onEnded={() => {
           if (activeChannel === 'A' && !isMixing) playNext();
         }} 
@@ -295,6 +315,7 @@ export default function PlayerBar() {
         ref={audioBRef} 
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleLoadedMetadata}
+        onError={handleAudioError}
         onEnded={() => {
           if (activeChannel === 'B' && !isMixing) playNext();
         }} 
@@ -414,6 +435,15 @@ export default function PlayerBar() {
 
         {/* BARRA INFERIOR DE CONTROLES */}
         <div className="fs-player-bottom">
+          
+          {/* AVISO DE ERROR (Si existe) */}
+          {errorMessage && (
+            <div className="player-error-toast">
+              <X size={14} style={{ marginRight: '8px' }} />
+              {errorMessage}
+            </div>
+          )}
+
           <div className="fs-progress-container">
             <span className="fs-time">{formatTime(uiTransition ? nextCurrentTime : currentTime)}</span>
             <input 
