@@ -42,12 +42,12 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: rgba(0, 255, 255, 0.12);
-  border: 1px dashed rgba(0, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--accent-glow);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #00ffff;
+  color: var(--accent-color);
   flex-shrink: 0;
 }
 
@@ -171,8 +171,8 @@
 .mini-bars span {
   display: block;
   width: 2px;
-  background: #00ffff;
-  border-radius: 1px;
+  background: var(--accent-color);
+  box-shadow: 0 0 8px var(--accent-glow);
   animation: bar-bounce 1s ease-in-out infinite alternate;
 }
 .mini-bars span:nth-child(1) { height: 6px; animation-delay: 0s; }
@@ -195,7 +195,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.liked-song-name.active { color: #00ffff; }
+.liked-song-name.active { color: var(--accent-color); }
 .liked-song-artist {
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.4);

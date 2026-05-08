@@ -13,28 +13,28 @@ export default function PlayerBar() {
   const [showQueue, setShowQueue] = useState(false);
   const idleTimerRef = useRef(null);
 
-  const { 
-    currentSong, 
-    queue,
-    isPlaying, 
-    togglePlay, 
-    playNext, 
-    playPrevious,
-    volume,
-    currentTime,
-    duration,
-    setCurrentTime,
-    setDuration,
-    fetchSongs,
-    playSong,
-    // Shuffle y Repeat
-    isShuffled,
-    repeatMode,
-    toggleShuffle,
-    toggleRepeat
-  } = usePlayerStore();
+  const currentSong = usePlayerStore(state => state.currentSong);
+  const queue = usePlayerStore(state => state.queue);
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const togglePlay = usePlayerStore(state => state.togglePlay);
+  const playNext = usePlayerStore(state => state.playNext);
+  const playPrevious = usePlayerStore(state => state.playPrevious);
+  const volume = usePlayerStore(state => state.volume);
+  const currentTime = usePlayerStore(state => state.currentTime);
+  const duration = usePlayerStore(state => state.duration);
+  const setCurrentTime = usePlayerStore(state => state.setCurrentTime);
+  const setDuration = usePlayerStore(state => state.setDuration);
+  const fetchSongs = usePlayerStore(state => state.fetchSongs);
+  const playSong = usePlayerStore(state => state.playSong);
+  const isShuffled = usePlayerStore(state => state.isShuffled);
+  const repeatMode = usePlayerStore(state => state.repeatMode);
+  const toggleShuffle = usePlayerStore(state => state.toggleShuffle);
+  const toggleRepeat = usePlayerStore(state => state.toggleRepeat);
 
-  const { crossfadeEnabled, crossfadeTime, likedSongs, toggleLike } = useSettingsStore();
+  const crossfadeEnabled = useSettingsStore(state => state.crossfadeEnabled);
+  const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
+  const likedSongs = useSettingsStore(state => state.likedSongs);
+  const toggleLike = useSettingsStore(state => state.toggleLike);
   const [isMixing, setIsMixing] = useState(false);
   const isMixingRef = useRef(false); // Ref para leer en effects sin dependencia
   const [activeChannel, setActiveChannel] = useState('A'); // 'A' o 'B'

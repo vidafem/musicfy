@@ -14,8 +14,14 @@ import './ClientLayout.css';
 export default function ClientLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
-  const { queue, fetchSongs, playSong } = usePlayerStore();
-  const { accentColor, accentOpacity } = useSettingsStore();
+  
+  // OPTIMIZACIÓN: Selectores específicos para evitar re-renders por el tiempo de la música
+  const queue = usePlayerStore(state => state.queue);
+  const fetchSongs = usePlayerStore(state => state.fetchSongs);
+  const playSong = usePlayerStore(state => state.playSong);
+  
+  const accentColor = useSettingsStore(state => state.accentColor);
+  const accentOpacity = useSettingsStore(state => state.accentOpacity);
 
   // APLICAR TEMA DINÁMICO
   useEffect(() => {

@@ -163,7 +163,7 @@
 }
 
 .search-result-name.active {
-    color: #00ffff;
+    color: var(--accent-color);
 }
 
 .search-result-artist {
@@ -202,7 +202,8 @@
 
 .mini-bars span {
     width: 2px;
-    background: #00ffff;
+    background: var(--accent-color);
+    box-shadow: 0 0 8px var(--accent-glow);
     border-radius: 1px;
     animation: bar-bounce 1s ease-in-out infinite alternate;
 }

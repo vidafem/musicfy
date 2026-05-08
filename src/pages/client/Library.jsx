@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Heart, Plus, ChevronRight, Music, ListMusic, Play } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -12,11 +12,21 @@ import './Library.css';
  */
 export default function Library() {
   const [showLiked, setShowLiked] = useState(false);
-  const { queue, currentSong, isPlaying, playSong, togglePlay } = usePlayerStore();
-  const { likedSongs, toggleLike } = useSettingsStore();
+  
+  // OPTIMIZACIÓN: Selectores para evitar re-renders innecesarios
+  const queue = usePlayerStore(state => state.queue);
+  const currentSong = usePlayerStore(state => state.currentSong);
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const playSong = usePlayerStore(state => state.playSong);
+  const togglePlay = usePlayerStore(state => state.togglePlay);
 
-  // Canciones que el usuario ha marcado con ❤️
-  const likedList = queue.filter(s => likedSongs.includes(s.id));
+  const likedSongs = useSettingsStore(state => state.likedSongs);
+  const toggleLike = useSettingsStore(state => state.toggleLike);
+
+  // OPTIMIZACIÓN: Memoizar la lista de favoritos para no filtrar en cada renderizado
+  const likedList = useMemo(() => {
+    return queue.filter(s => likedSongs.includes(s.id));
+  }, [queue, likedSongs]);
 
   const handleSongClick = (song) => {
     if (currentSong?.id === song.id) {

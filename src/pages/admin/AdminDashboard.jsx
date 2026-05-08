@@ -77,7 +77,7 @@ export default function AdminDashboard() {
               <p style={labelStyle}>Total Biblioteca</p>
               <h3 style={valueStyle}>{stats.totalSongs}</h3>
             </div>
-            <div style={{ ...iconBoxStyle, background: 'rgba(0,255,255,0.1)', color: '#00ffff' }}>
+            <div style={{ ...iconBoxStyle, background: 'rgba(255,255,255,0.05)', color: 'var(--accent-color)' }}>
               <Music size={24} />
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
         {/* SECCIÓN: MÁS ESCUCHADAS */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <Activity size={20} color="#00ffff" />
+            <Activity size={20} color="var(--accent-color)" />
             <h3 style={{ margin: 0 }}>Ranking de Reproducciones</h3>
           </div>
 

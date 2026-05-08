@@ -6,15 +6,20 @@ import GlassButtonWrapper from './ui/GlassButtonWrapper';
 import './SettingsSidebar.css';
 
 export default function SettingsSidebar({ isOpen, onClose }) {
-  const { 
-    animatedCovers, toggleAnimatedCovers,
-    crossfadeEnabled, toggleCrossfade,
-    crossfadeTime, setCrossfadeTime,
-    equalizerEnabled, toggleEqualizer,
-    accentColor, setAccentColor,
-    accentOpacity, setAccentOpacity,
-    clearCache
-  } = useSettingsStore();
+  // OPTIMIZACIÓN: Selectores específicos para no re-renderizar con el tiempo de la música
+  const animatedCovers = useSettingsStore(state => state.animatedCovers);
+  const toggleAnimatedCovers = useSettingsStore(state => state.toggleAnimatedCovers);
+  const crossfadeEnabled = useSettingsStore(state => state.crossfadeEnabled);
+  const toggleCrossfade = useSettingsStore(state => state.toggleCrossfade);
+  const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
+  const setCrossfadeTime = useSettingsStore(state => state.setCrossfadeTime);
+  const equalizerEnabled = useSettingsStore(state => state.equalizerEnabled);
+  const toggleEqualizer = useSettingsStore(state => state.toggleEqualizer);
+  const accentColor = useSettingsStore(state => state.accentColor);
+  const setAccentColor = useSettingsStore(state => state.setAccentColor);
+  const accentOpacity = useSettingsStore(state => state.accentOpacity);
+  const setAccentOpacity = useSettingsStore(state => state.setAccentOpacity);
+  const clearCache = useSettingsStore(state => state.clearCache);
   
   const { signOut, user } = useAuthStore();
 

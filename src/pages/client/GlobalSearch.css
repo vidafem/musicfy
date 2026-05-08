@@ -21,8 +21,8 @@
 }
 
 .gs-main-icon {
-  color: #00ffff;
-  filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.4));
+  color: var(--accent-color);
+  filter: drop-shadow(0 0 10px var(--accent-glow));
 }
 
 .gs-title {
@@ -51,8 +51,8 @@
 }
 
 .gs-search-form:focus-within {
-  border-color: rgba(0, 255, 255, 0.3);
-  box-shadow: 0 10px 40px rgba(0, 255, 255, 0.1);
+  border-color: var(--accent-glow);
+  box-shadow: 0 10px 40px var(--accent-glow);
 }
 
 .gs-input-wrapper {
@@ -76,7 +76,7 @@
   font-family: inherit;
 }
 
-.gs-loader { color: #00ffff; }
+.gs-loader { color: var(--accent-color); }
 
 .gs-submit-btn {
   background: #fff;
@@ -92,7 +92,7 @@
 
 .gs-submit-btn:hover:not(:disabled) {
   transform: scale(1.05);
-  background: #00ffff;
+  background: var(--accent-color);
 }
 
 .gs-submit-btn:disabled {
@@ -127,8 +127,8 @@
 }
 
 .gs-card.active {
-    border-color: rgba(0, 255, 255, 0.4);
-    background: rgba(0, 255, 255, 0.05);
+    border-color: var(--accent-glow);
+    background: var(--accent-glow);
 }
 
 .gs-card-cover {
@@ -248,7 +248,8 @@
 
 .gs-playing-bars span {
   width: 4px;
-  background: #00ffff;
+  background: var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-glow);
   border-radius: 2px;
   animation: gs-bar-bounce 1s infinite alternate;
 }

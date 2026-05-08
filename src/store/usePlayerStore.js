@@ -14,16 +14,39 @@ export const usePlayerStore = create((set, get) => ({
   repeatMode: 'none', // 'none' | 'one' | 'all'
 
   fetchSongs: async () => {
+    // OPTIMIZACIÓN: Solo traemos datos ligeros para la cola inicial
     const { data, error } = await supabase
       .from('songs')
-      .select('*')
+      .select('id, title, artist, cover_url, url, created_at')
       .order('created_at', { ascending: false });
     if (!error && data.length > 0) {
       set({ queue: data, currentSong: get().currentSong || data[0] });
     }
   },
 
-  playSong: (song) => set({ currentSong: song, isPlaying: true }),
+  // Carga las letras y detalles pesados solo cuando se necesitan
+  fetchSongDetails: async (songId) => {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('lyrics, background_url')
+      .eq('id', songId)
+      .single();
+    
+    if (!error && data) {
+      set((state) => ({
+        queue: state.queue.map(s => s.id === songId ? { ...s, ...data } : s),
+        currentSong: state.currentSong?.id === songId ? { ...state.currentSong, ...data } : state.currentSong
+      }));
+    }
+  },
+
+  playSong: (song) => {
+    set({ currentSong: song, isPlaying: true });
+    // Si no tiene letras cargadas, las buscamos en segundo plano
+    if (!song.lyrics) {
+      get().fetchSongDetails(song.id);
+    }
+  },
 
   togglePlay: () => set((state) => ({
     isPlaying: state.currentSong ? !state.isPlaying : false
@@ -69,9 +92,13 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     if (currentIndex < queue.length - 1) {
-      set({ currentSong: queue[currentIndex + 1], isPlaying: true });
+      const nextS = queue[currentIndex + 1];
+      set({ currentSong: nextS, isPlaying: true });
+      if (!nextS.lyrics) get().fetchSongDetails(nextS.id);
     } else if (repeatMode === 'all') {
-      set({ currentSong: queue[0], isPlaying: true });
+      const firstS = queue[0];
+      set({ currentSong: firstS, isPlaying: true });
+      if (!firstS.lyrics) get().fetchSongDetails(firstS.id);
     }
   },
 
@@ -79,9 +106,6 @@ export const usePlayerStore = create((set, get) => ({
     const { currentSong, queue, currentTime } = get();
     if (!currentSong || queue.length === 0) return;
 
-    // Si han pasado más de 3 segundos, solo reiniciar en el store.
-    // El elemento <audio> continuará desde su posición actual hasta
-    // que el usuario use la barra de progreso (comportamiento original).
     if (currentTime > 3) {
       set({ currentTime: 0 });
       return;
@@ -89,7 +113,9 @@ export const usePlayerStore = create((set, get) => ({
 
     const currentIndex = queue.findIndex(s => s.id === currentSong.id);
     if (currentIndex > 0) {
-      set({ currentSong: queue[currentIndex - 1], isPlaying: true });
+      const prevS = queue[currentIndex - 1];
+      set({ currentSong: prevS, isPlaying: true });
+      if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
     }
   }
 }));
