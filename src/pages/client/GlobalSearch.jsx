@@ -27,8 +27,8 @@ export default function GlobalSearch() {
     setSearched(true);
     
     try {
-      // Usamos el proxy configurado en vite.config.js para saltar el CORS
-      const res = await fetch(`/api-proxy/search?q=${encodeURIComponent(query)}&filter=music_videos`);
+      // Usamos una instancia pública de Piped (YouTube Proxy) para la búsqueda
+      const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_videos`);
       const data = await res.json();
       
       // Mapeamos los resultados al formato que entiende nuestra app
@@ -60,7 +60,7 @@ export default function GlobalSearch() {
     // Para obtener la URL real del stream (mp3/webm) necesitamos hacer un fetch al stream info
     setLoading(true);
     try {
-        const res = await fetch(`/api-proxy/streams/${song.id}`);
+        const res = await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`);
         const data = await res.json();
         
         // Buscamos el stream de audio con mejor calidad

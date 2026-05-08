@@ -7,6 +7,7 @@ import GlassButtonWrapper from '../components/ui/GlassButtonWrapper';
 import { usePlayerStore } from '../store/usePlayerStore';
 import LibraryPage from '../pages/client/Library';
 import GlobalSearch from '../pages/client/GlobalSearch';
+import SearchPage from '../pages/client/Search';
 import './ClientLayout.css';
 
 export default function ClientLayout() {
@@ -127,6 +128,9 @@ export default function ClientLayout() {
              </div>
            } />
            {/* NUEVA RUTA: Biblioteca completa */}
+           {/* RUTA: Búsqueda Local (Supabase) */}
+           <Route path="/search" element={<SearchPage />} />
+
            {/* NUEVA RUTA: Búsqueda Global (YouTube) */}
            <Route path="/world" element={<GlobalSearch />} />
            
