@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  Play, 
-  TrendingUp, 
-  Newspaper, 
-  Music, 
-  Clock, 
+import {
+  Users,
+  Play,
+  TrendingUp,
+  Newspaper,
+  Music,
+  Clock,
   ExternalLink,
   Activity
 } from 'lucide-react';
@@ -33,7 +33,7 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     // 1. Obtener total de canciones
     const { count: songCount } = await supabase.from('songs').select('*', { count: 'exact', head: true });
-    
+
     // 2. Obtener total de artistas únicos
     const { data: artistsData } = await supabase.from('songs').select('artist');
     const uniqueArtists = new Set(artistsData?.map(s => s.artist)).size;
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ padding: '10px' }}>
-      
+
       {/* TARJETAS DE RESUMEN */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginBottom: '40px' }}>
         <div style={cardStyle}>
@@ -99,19 +99,19 @@ export default function AdminDashboard() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
-        
+
         {/* SECCIÓN: MÁS ESCUCHADAS */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <Activity size={20} color="#00ffff" />
             <h3 style={{ margin: 0 }}>Ranking de Reproducciones</h3>
           </div>
-          
+
           <div style={{ display: 'grid', gap: '10px' }}>
             {stats.topSongs.map((song, i) => (
               <div key={i} style={rankItemStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'rgba(255,255,255,0.1)', width: '25px' }}>{i+1}</span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'rgba(255,255,255,0.1)', width: '25px' }}>{i + 1}</span>
                   <img src={song.cover_url} alt="" style={{ width: '45px', height: '45px', borderRadius: '6px' }} />
                   <div>
                     <h4 style={{ margin: 0, fontSize: '1rem' }}>{song.title}</h4>
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
             <Newspaper size={20} color="#ff00ff" />
             <h3 style={{ margin: 0 }}>Radar Musical</h3>
           </div>
-          
+
           <div style={{ display: 'grid', gap: '20px' }}>
             {news.map(item => (
               <div key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', pb: '15px', paddingBottom: '15px' }}>
@@ -145,9 +145,9 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
-            <button style={{ 
-              background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', 
-              padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' 
+            <button style={{
+              background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+              padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem'
             }}>
               Ver más noticias
             </button>
