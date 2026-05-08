@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Play, Pause, SkipBack, SkipForward, ChevronDown, Shuffle, Repeat, Heart, ListMusic, MessageSquare, X } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -41,6 +41,7 @@ export default function PlayerBar() {
   const [nextSongInfo, setNextSongInfo] = useState(null);
   const [uiTransition, setUiTransition] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [localCurrentTime, setLocalCurrentTime] = useState(0); // Tiempo local rápido para UI
   
   const audioARef = useRef(null);
   const audioBRef = useRef(null);
@@ -178,6 +179,7 @@ export default function PlayerBar() {
     const isSecondaryChannel = (activeChannel === 'A' && audio === audioBRef.current) || 
                                (activeChannel === 'B' && audio === audioARef.current);
     if (isMainChannel) {
+      setLocalCurrentTime(audio.currentTime);
       setCurrentTime(audio.currentTime);
       if (audio.duration) setDuration(audio.duration);
     }
@@ -284,20 +286,23 @@ export default function PlayerBar() {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  if (!currentSong) return null;
-
   // Parsear letras (Soporta LRC Sincronizado y Texto Plano)
-  const parsedLyrics = currentSong.lyrics ? currentSong.lyrics.split('\n').map((line, index) => {
-    const timeMatch = line.match(/\[(\d+):(\d+\.\d+)\]/);
-    if (timeMatch) {
-      return { 
-        time: parseInt(timeMatch[1]) * 60 + parseFloat(timeMatch[2]), 
-        text: line.replace(/\[\d+:\d+\.\d+\]/, '').trim() 
-      };
-    }
-    // Si no hay tiempo, le asignamos un tiempo basado en su posición para que no se amontonen
-    return { time: index * 0.001, text: line.trim() }; 
-  }).filter(l => l.text).sort((a, b) => a.time - b.time) : [];
+  // OPTIMIZADO: Solo se procesa cuando la canción cambia
+  const parsedLyrics = useMemo(() => {
+    if (!currentSong?.lyrics) return [];
+    return currentSong.lyrics.split('\n').map((line, index) => {
+      const timeMatch = line.match(/\[(\d+):(\d+\.\d+)\]/);
+      if (timeMatch) {
+        return { 
+          time: parseInt(timeMatch[1]) * 60 + parseFloat(timeMatch[2]), 
+          text: line.replace(/\[\d+:\d+\.\d+\]/, '').trim() 
+        };
+      }
+      return { time: index * 0.001, text: line.trim() }; 
+    }).filter(l => l.text).sort((a, b) => a.time - b.time);
+  }, [currentSong?.id, currentSong?.lyrics]);
+
+  if (!currentSong) return null;
 
   return (
     <>
@@ -393,7 +398,9 @@ export default function PlayerBar() {
           {parsedLyrics.length > 0 && (
             <div className={`fs-right-panel fs-lyrics-container ${showLyrics ? 'visible' : ''} ${uiTransition ? 'fading-out' : ''}`} ref={lyricsContainerRef}>
               {parsedLyrics.map((line, idx) => {
-                const isActive = currentTime >= line.time && (idx === parsedLyrics.length - 1 || currentTime < parsedLyrics[idx + 1].time);
+                // OFFSET DE SINCRONIZACIÓN: Añadimos 200ms para compensar el retardo de renderizado
+                const displayTime = localCurrentTime + 0.2;
+                const isActive = displayTime >= line.time && (idx === parsedLyrics.length - 1 || displayTime < parsedLyrics[idx + 1].time);
                 return (
                   <p key={idx} className={`lyric-line ${isActive ? 'active' : ''}`}>
                     {line.text}
@@ -419,8 +426,9 @@ export default function PlayerBar() {
               <div ref={nextLyricsContainerRef} className={`fs-right-panel fs-lyrics-container next-lyrics-panel ${uiTransition ? 'fading-in' : ''}`}>
                 {nextLyrics.map((line, idx) => {
                   // Sincronizar con el tiempo del canal secundario (canción entrante)
-                  const isActive = nextCurrentTime >= line.time && 
-                    (idx === nextLyrics.length - 1 || nextCurrentTime < nextLyrics[idx + 1].time);
+                  const displayTime = nextCurrentTime + 0.2;
+                  const isActive = displayTime >= line.time && 
+                    (idx === nextLyrics.length - 1 || displayTime < nextLyrics[idx + 1].time);
                   return (
                     <p key={idx} className={`lyric-line ${isActive ? 'active' : ''}`}>
                       {line.text}
