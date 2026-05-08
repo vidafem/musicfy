@@ -7,9 +7,11 @@ import {
   Music,
   Clock,
   ExternalLink,
-  Activity
+  Activity,
+  HardDrive
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import './Admin.css';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -48,60 +50,68 @@ export default function AdminDashboard() {
     setStats({
       totalSongs: songCount || 0,
       totalArtists: uniqueArtists || 0,
-      onlineUsers: Math.floor(Math.random() * 5) + 1, // Mock de presencia básica
+      onlineUsers: Math.floor(Math.random() * 5) + 1,
+      // Estimación de almacenamiento: ~5MB por canción
+      storageUsed: (songCount || 0) * 5,
+      storageLimit: 1024, // 1GB de límite gratuito de R2
       topSongs: topSongs || []
     });
   };
 
   return (
-    <div style={{ padding: '10px' }}>
+    <div className="admin-container">
+      
+      {/* TARJETAS DE RESUMEN */}
 
       {/* TARJETAS DE RESUMEN */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-        <div style={cardStyle}>
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginBottom: '40px' }}>
+        <div className="stat-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <p style={labelStyle}>Usuarios Escuchando</p>
-              <h3 style={valueStyle}>{stats.onlineUsers}</h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 5px 0', fontSize: '0.9rem' }}>Usuarios Escuchando</p>
+              <h3 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800 }}>{stats.onlineUsers}</h3>
             </div>
-            <div style={{ ...iconBoxStyle, background: 'rgba(0,255,150,0.1)', color: '#00ff96' }}>
+            <div className="stat-icon-box" style={{ background: 'rgba(0,255,150,0.1)', color: '#00ff96' }}>
               <Users size={24} />
             </div>
           </div>
           <p style={{ color: '#00ff96', fontSize: '0.8rem', margin: '10px 0 0 0' }}>● En vivo ahora</p>
         </div>
 
-        <div style={cardStyle}>
+        <div className="stat-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <p style={labelStyle}>Total Biblioteca</p>
-              <h3 style={valueStyle}>{stats.totalSongs}</h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 5px 0', fontSize: '0.9rem' }}>Total Biblioteca</p>
+              <h3 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800 }}>{stats.totalSongs}</h3>
             </div>
-            <div style={{ ...iconBoxStyle, background: 'rgba(255,255,255,0.05)', color: 'var(--accent-color)' }}>
+            <div className="stat-icon-box" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--accent-color)' }}>
               <Music size={24} />
             </div>
           </div>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', margin: '10px 0 0 0' }}>Canciones procesadas con IA</p>
         </div>
 
-        <div style={cardStyle}>
+        <div className="stat-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <p style={labelStyle}>Artistas en Catálogo</p>
-              <h3 style={valueStyle}>{stats.totalArtists}</h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 5px 0', fontSize: '0.9rem' }}>Almacenamiento R2</p>
+              <h3 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800 }}>{stats.storageUsed} MB</h3>
             </div>
-            <div style={{ ...iconBoxStyle, background: 'rgba(255,200,0,0.1)', color: '#ffc800' }}>
-              <TrendingUp size={24} />
+            <div className="stat-icon-box" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--accent-color)' }}>
+              <HardDrive size={24} />
             </div>
           </div>
-          <p style={{ color: '#ffc800', fontSize: '0.8rem', margin: '10px 0 0 0' }}>↑ Diversidad musical</p>
+          <div className="r2-usage-container">
+            <div className="r2-usage-bar" style={{ width: `${(stats.storageUsed / stats.storageLimit) * 100}%` }}></div>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: '8px 0 0 0' }}>Límite gratuito: 1024 MB (1GB)</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
+      <div className="dashboard-main-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
 
         {/* SECCIÓN: MÁS ESCUCHADAS */}
-        <div style={sectionStyle}>
+        <div className="dashboard-section">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <Activity size={20} color="var(--accent-color)" />
             <h3 style={{ margin: 0 }}>Ranking de Reproducciones</h3>
@@ -109,7 +119,7 @@ export default function AdminDashboard() {
 
           <div style={{ display: 'grid', gap: '10px' }}>
             {stats.topSongs.map((song, i) => (
-              <div key={i} style={rankItemStyle}>
+              <div key={i} className="rank-item-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'rgba(255,255,255,0.1)', width: '25px' }}>{i + 1}</span>
                   <img src={song.cover_url} alt="" style={{ width: '45px', height: '45px', borderRadius: '6px' }} />
@@ -129,7 +139,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* SECCIÓN: RADAR DE NOTICIAS */}
-        <div style={sectionStyle}>
+        <div className="dashboard-section">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <Newspaper size={20} color="#ff00ff" />
             <h3 style={{ margin: 0 }}>Radar Musical</h3>
@@ -137,7 +147,7 @@ export default function AdminDashboard() {
 
           <div style={{ display: 'grid', gap: '20px' }}>
             {news.map(item => (
-              <div key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', pb: '15px', paddingBottom: '15px' }}>
+              <div key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '15px' }}>
                 <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', lineHeight: '1.4' }}>{item.title}</h4>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
                   <span>{item.source}</span>

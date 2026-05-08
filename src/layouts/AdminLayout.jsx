@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut, UploadCloud, Layers } from 'lucide-react';
+import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut, UploadCloud, Layers, Menu, X as CloseIcon } from 'lucide-react';
 import MusicManager from '../pages/admin/MusicManager';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import MediaLibrary from '../pages/admin/MediaLibrary';
@@ -10,6 +10,7 @@ import './AdminLayout.css';
 export default function AdminLayout() {
   const { signOut, user } = useAuthStore();
   const location = useLocation();
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   // Función para obtener el título según la ruta actual
   const getPageTitle = () => {
@@ -23,29 +24,35 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="admin-container">
+    <div className={`admin-container ${isSidebarOpen ? 'sidebar-open' : ''}`}>
       
+      {/* OVERLAY PARA MÓVIL */}
+      {isSidebarOpen && <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>}
+
       {/* SIDEBAR */}
-      <aside className="admin-sidebar">
+      <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="admin-logo">
           <img src="/icono.png" alt="Musicfy" />
           <h2>Musicfy<span>Admin</span></h2>
+          <button className="sidebar-close-mobile" onClick={() => setIsSidebarOpen(false)}>
+            <CloseIcon size={24} />
+          </button>
         </div>
 
         <nav className="admin-nav">
-          <NavLink to="/admin" end className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/admin" end onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             <LayoutDashboard size={20} /> Dashboard
           </NavLink>
-          <NavLink to="/admin/music" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/admin/music" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             <Music size={20} /> Librería Musical
           </NavLink>
-          <NavLink to="/admin/media" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/admin/media" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             <ImagePlay size={20} /> Media & Fondos
           </NavLink>
-          <NavLink to="/admin/users" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/admin/users" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             <Users size={20} /> Usuarios
           </NavLink>
-          <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/admin/settings" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             <Settings size={20} /> Ajustes Generales
           </NavLink>
         </nav>
@@ -66,6 +73,9 @@ export default function AdminLayout() {
         
         {/* TOPBAR */}
         <header className="admin-topbar">
+          <button className="sidebar-toggle-btn" onClick={() => setIsSidebarOpen(true)}>
+            <Menu size={24} />
+          </button>
           <h1>{getPageTitle()}</h1>
         </header>
         

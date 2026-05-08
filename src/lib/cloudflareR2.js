@@ -17,22 +17,27 @@ const s3Client = new S3Client({
  */
 export const uploadToR2 = async (file, path) => {
   try {
+    console.log("Iniciando subida a R2:", path);
     const arrayBuffer = await file.arrayBuffer();
     const fileBody = new Uint8Array(arrayBuffer);
 
+    const bucketName = import.meta.env.VITE_R2_BUCKET_NAME;
+    console.log("Usando Bucket:", bucketName);
+
     const command = new PutObjectCommand({
-      Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
+      Bucket: bucketName,
       Key: path,
       Body: fileBody,
       ContentType: file.type || 'application/octet-stream',
     });
 
-    await s3Client.send(command);
+    const response = await s3Client.send(command);
+    console.log("Respuesta exitosa de R2:", response);
     
     const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
     return `${publicUrl}/${path}`;
   } catch (error) {
-    console.error("Error subiendo a R2:", error);
+    console.error("ERROR DETALLADO R2:", error);
     throw error;
   }
 };

@@ -1,0 +1,164 @@
+/* ESTILOS GLOBALES PARA EL PANEL DE ADMINISTRACIÓN */
+
+.admin-container {
+  width: 100%;
+  color: white;
+  animation: fadeIn 0.5s ease;
+  box-sizing: border-box;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* RESPONSIVIDAD MÓVIL */
+@media (max-width: 768px) {
+  .admin-container {
+    padding: 20px 15px 120px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .dashboard-main-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-title {
+    font-size: 1.8rem !important;
+  }
+}
+
+/* TARJETAS DE ESTADÍSTICAS */
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent-glow);
+}
+
+.stat-icon-box {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* SECCIONES DEL DASHBOARD */
+.dashboard-section {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  padding: 30px;
+}
+
+/* CARGADOR DE MÚSICA (MusicManager) */
+.upload-zone {
+  border: 2px dashed rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 40px 20px;
+  text-align: center;
+  background: rgba(255,255,255,0.02);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.upload-zone.active {
+  border-color: var(--accent-color);
+  background: var(--accent-glow);
+}
+
+.manager-form-container {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 30px;
+}
+
+@media (max-width: 900px) {
+  .manager-form-container {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .manager-cover-preview {
+    margin: 0 auto;
+  }
+}
+
+.admin-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.admin-input:focus {
+  border-color: var(--accent-color);
+}
+
+/* BARRA DE ALMACENAMIENTO R2 */
+.r2-usage-container {
+  margin-top: 20px;
+  background: rgba(255,255,255,0.05);
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.r2-usage-bar {
+  height: 100%;
+  background: var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-glow);
+  transition: width 1s ease;
+}
+
+/* OVERLAY DE CARGA (MODAL) */
+.admin-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.admin-loading-card {
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 40px;
+  border-radius: 24px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  animation: modalIn 0.3s ease-out;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
