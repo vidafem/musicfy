@@ -74,10 +74,11 @@ export default function SettingsSidebar({ isOpen, onClose }) {
                 <span>Tiempo de fusión: {crossfadeTime} segundos</span>
                 <input 
                   type="range" 
-                  min="1" max="12" 
+                  min="3" 
+                  max="20" 
                   value={crossfadeTime} 
                   onChange={(e) => setCrossfadeTime(parseInt(e.target.value))}
-                  className="range-slider"
+                  style={{ width: '100%', marginTop: '10px' }}
                 />
               </div>
             )}

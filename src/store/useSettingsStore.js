@@ -9,14 +9,53 @@ export const useSettingsStore = create(
       // ESTADOS POR DEFECTO
       animatedCovers: true,
       crossfadeEnabled: false,
-      crossfadeTime: 3, // Segundos de mezcla
+      crossfadeTime: 10,
       equalizerEnabled: false,
-      
+      likedSongs: [], // Array de IDs de canciones marcadas con ❤️
+
       // ACCIONES PARA MODIFICAR ESTADOS
       toggleAnimatedCovers: () => set((state) => ({ animatedCovers: !state.animatedCovers })),
       toggleCrossfade: () => set((state) => ({ crossfadeEnabled: !state.crossfadeEnabled })),
-      setCrossfadeTime: (time) => set({ crossfadeTime: time }),
+      setCrossfadeTime: (time) => set({ crossfadeTime: Math.min(20, time) }),
       toggleEqualizer: () => set((state) => ({ equalizerEnabled: !state.equalizerEnabled })),
+
+      // Agregar o quitar una canción de Me Gusta (guarda solo el ID)
+      toggleLike: (songId, songData = null) => {
+        const { likedSongs, addExternalSong } = get();
+        const already = likedSongs.includes(songId);
+        
+        // Si es una canción externa (YouTube) y no la tenemos, la guardamos en la DB primero
+        if (!already && songData?.is_external) {
+            addExternalSong(songData);
+        }
+
+        set({
+          likedSongs: already
+            ? likedSongs.filter(id => id !== songId)
+            : [...likedSongs, songId]
+        });
+      },
+
+      // Persistir metadata de YouTube en Supabase
+      addExternalSong: async (song) => {
+        const { supabase } = await import('../supabaseClient');
+        const { data: existing } = await supabase
+            .from('songs')
+            .select('id')
+            .eq('title', song.title)
+            .eq('artist', song.artist)
+            .single();
+
+        if (!existing) {
+            await supabase.from('songs').insert([{
+                title: song.title,
+                artist: song.artist,
+                url: song.url,
+                cover_url: song.cover_url,
+                lyrics: '[Streaming de YouTube]'
+            }]);
+        }
+      },
       
       // LÓGICA PARA ELIMINAR CACHÉ
       clearCache: async () => {

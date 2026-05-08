@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Search, Library, Settings, BarChart2 } from 'lucide-react';
+import { Home, Search, Library, Settings, Globe } from 'lucide-react';
 import SettingsSidebar from '../components/SettingsSidebar';
 import PlayerBar from '../components/PlayerBar';
 import GlassButtonWrapper from '../components/ui/GlassButtonWrapper';
 import { usePlayerStore } from '../store/usePlayerStore';
+import LibraryPage from '../pages/client/Library';
+import GlobalSearch from '../pages/client/GlobalSearch';
 import './ClientLayout.css';
 
 export default function ClientLayout() {
@@ -19,14 +21,18 @@ export default function ClientLayout() {
   return (
     <div className="client-layout">
       
-      {/* SIDEBAR TV/DESKTOP */}
-      <nav className="tv-sidebar">
+      {/* HEADER TV/DESKTOP (Horizontal Superior) */}
+      <nav className="tv-header">
         
-        <div className="sidebar-top">
-          <img src="/icon.png" alt="Musicfy" className="sidebar-logo" />
+        {/* LOGO (A la izquierda) */}
+        <div className="header-left">
+          <img src="/icon.png" alt="Musicfy" className="sidebar-logo-bottom" />
         </div>
+
+        {/* ESPACIO PARA LA PÍLDORA DEL REPRODUCTOR (Se posiciona aquí vía CSS desde PlayerBar) */}
+        <div className="header-player-space"></div>
         
-        {/* PÍLDORA CENTRAL CON LIQUID GLASS (Envuelve directamente el contenido) */}
+        {/* PÍLDORA CENTRAL DE NAVEGACIÓN (Centrada en la pantalla) */}
         <div className="sidebar-pill-wrapper">
           <GlassButtonWrapper className="glass-pill-container" radius="35" depth="15" blur="4" strength="0" background-color="rgba(25, 25, 25, 0.5)" chromatic-aberration="3">
             <div className="tv-pill-content">
@@ -35,6 +41,9 @@ export default function ClientLayout() {
               </Link>
               <Link to="/search" className={`pill-icon ${location.pathname === '/search' ? 'active' : ''}`}>
                 <Search size={22} strokeWidth={location.pathname === '/search' ? 2.5 : 2} />
+              </Link>
+              <Link to="/world" className={`pill-icon ${location.pathname === '/world' ? 'active' : ''}`} title="Música Global">
+                <Globe size={22} strokeWidth={location.pathname === '/world' ? 2.5 : 2} />
               </Link>
               <Link to="/library" className={`pill-icon ${location.pathname === '/library' ? 'active' : ''}`}>
                 <Library size={22} strokeWidth={location.pathname === '/library' ? 2.5 : 2} />
@@ -46,11 +55,6 @@ export default function ClientLayout() {
           </GlassButtonWrapper>
         </div>
 
-        <div className="sidebar-bottom">
-          <button className="pill-icon btn-icon now-playing-icon">
-            <BarChart2 size={24} />
-          </button>
-        </div>
       </nav>
 
       {/* MENÚ MÓVIL (Píldora Horizontal estilo Apple Music) */}
@@ -85,7 +89,7 @@ export default function ClientLayout() {
            <Route path="/" element={
              <div className="home-container">
                 <div className="hero-background"></div>
-                <div className="content-scroll">
+                <div className="content-scroll" style={{ padding: '120px 40px 100px 40px' }}>
                   <h1 className="section-title">Librería Principal</h1>
                   <h2 className="hero-title">Tus canciones</h2>
                   <p className="hero-subtitle">Música almacenada en la nube y gestionada por IA.</p>
@@ -122,6 +126,11 @@ export default function ClientLayout() {
                 </div>
              </div>
            } />
+           {/* NUEVA RUTA: Biblioteca completa */}
+           {/* NUEVA RUTA: Búsqueda Global (YouTube) */}
+           <Route path="/world" element={<GlobalSearch />} />
+           
+           <Route path="/library" element={<LibraryPage />} />
         </Routes>
       </main>
     </div>

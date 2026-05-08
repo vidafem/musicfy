@@ -9,27 +9,46 @@
 }
 
 /* =========================================
-   TV / DESKTOP SIDEBAR
+   TV / DESKTOP HEADER (HORIZONTAL TOP)
    ========================================= */
-.tv-sidebar {
-  position: absolute; /* FLOTA sobre el main-content y su fondo */
+.tv-header {
+  position: fixed; /* FLOTA en la parte superior */
   top: 0; left: 0;
-  width: 100px;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  width: 100vw;
+  height: 90px;
+  display: flex; /* Se ocultará en móvil mediante media query abajo */
+  flex-direction: row;
   align-items: center;
-  padding: 30px 0;
-  z-index: 50;
-  pointer-events: none; /* Permite hacer clicks "a través" de los huecos vacíos */
+  padding: 0 40px;
+  z-index: 150;
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
-.sidebar-top { margin-bottom: auto; pointer-events: auto; }
-.sidebar-logo { width: auto; max-width: 50px; height: 35px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); }
-.sidebar-bottom { margin-top: auto; pointer-events: auto; }
-.now-playing-icon { color: #00ffff; animation: pulse 2s infinite; }
+@media (max-width: 768px) {
+  .tv-header { display: none !important; }
+}
+
+.header-left { 
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  margin-right: 20px;
+}
+
+.sidebar-logo-bottom { 
+  width: auto; 
+  max-width: 50px; 
+  height: 35px; 
+  object-fit: contain; 
+  filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); 
+}
 
 .sidebar-pill-wrapper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -45,8 +64,8 @@
 
 .tv-pill-content {
   display: flex;
-  flex-direction: column;
-  padding: 12px 10px;
+  flex-direction: row;
+  padding: 8px 15px;
   gap: 10px;
 }
 
@@ -151,7 +170,7 @@
 .content-scroll { 
   position: relative; 
   z-index: 10; 
-  padding: 80px 40px 100px 120px; /* 120px a la izquierda para que el texto no se monte bajo la TV Sidebar */
+  padding: 120px 40px 100px 40px; 
 }
 
 @media (max-width: 768px) {

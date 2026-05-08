@@ -9,5 +9,14 @@ export default defineConfig({
       // Forzamos el uso de la versión compilada para evitar errores de dependencias de Node/Native
       'jsmediatags': 'jsmediatags/dist/jsmediatags.min.js'
     }
+  },
+  server: {
+    proxy: {
+      '/api-proxy': {
+        target: 'https://pipedapi.kavin.rocks',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-proxy/, '')
+      }
+    }
   }
 })

@@ -3,11 +3,21 @@
    ================================== */
    .mini-player-pill-container {
     position: fixed;
-    bottom: 30px;
-    left: 140px; /* A la derecha del sidebar TV */
-    z-index: 90;
+    bottom: 30px; /* Posición por defecto para móviles */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 160;
     cursor: pointer;
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
+  }
+  
+  @media (min-width: 769px) {
+    .mini-player-pill-container {
+      bottom: auto;
+      top: 45px; /* Centro del header de 90px */
+      left: 110px;
+      transform: translateY(-50%);
+    }
   }
   
   .mini-player-pill-container.hidden {
@@ -93,13 +103,32 @@
   /* Fondos */
   .fs-bg {
     position: absolute;
-    top: -10%; left: -10%; right: -10%; bottom: -10%; /* Márgenes más amplios para esconder bordes difuminados */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background-size: cover;
     background-position: center;
-    filter: blur(0px) brightness(0.6); /* Sin difuminar por defecto */
     z-index: 1;
-    transform: scale(1.2); /* Siempre escalado para evitar saltos y esconder bordes */
-    transition: filter 0.8s cubic-bezier(0.25, 1, 0.5, 1); /* Solo animamos filter */
+    /* Transición suave para evitar el "flash" cuando la imagen cambia al final del mix */
+    transition: opacity 0.8s ease, filter 0.8s ease;
+  }
+
+  .fs-bg.next-bg {
+    opacity: 0;
+    z-index: 2;
+    transition: opacity 2s ease;
+    pointer-events: none;
+  }
+
+  .fs-bg.next-bg.visible {
+    opacity: 1;
+  }
+
+  .fs-bg.fading-out {
+    filter: blur(20px) brightness(0.3);
+    opacity: 0;
+    transition: all 2s ease;
   }
   
   .fullscreen-tv-player.lyrics-mode .fs-bg {
@@ -110,7 +139,8 @@
     position: absolute;
     inset: 0;
     background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 100%);
-    z-index: 2;
+    z-index: 5; /* Asegurar que esté sobre todas las capas de fondo */
+    pointer-events: none;
   }
   
   /* Botón de cierre */
@@ -132,11 +162,18 @@
     position: relative;
     z-index: 5;
     flex: 1;
-    min-height: 0; /* CRUCIAL: previene que flexbox se desborde si el contenido es grande */
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .fs-content-wrapper.ui-transitioning {
+    filter: blur(20px);
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
   .fs-left-panel {
@@ -150,10 +187,38 @@
   /* Portada y Título (Izquierda) */
   .fs-main-info {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 30px;
+    /* SIN transition en base: evita el flash al limpiar clases de mix */
+  }
+
+  .fs-main-info.next-info {
+    position: absolute;
+    bottom: 50px;
+    left: 0;
+    opacity: 0;
+    filter: blur(15px);
+    transform: scale(0.9) translateY(30px);
+    pointer-events: none;
+    z-index: 10;
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
     width: 100%;
-    height: 180px; /* ALTURA FIJA ETERNA */
-    margin-bottom: 50px; /* MARGEN FIJO ETERNO */
-    transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .fs-main-info.fading-out {
+    opacity: 0;
+    filter: blur(15px);
+    transform: scale(1.05) translateY(-20px);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .fs-main-info.fading-in {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1) translateY(0);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
   }
   
   .fs-cover {
@@ -197,6 +262,10 @@
     text-shadow: 0 4px 10px rgba(0,0,0,0.5);
     letter-spacing: -1px;
     transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
   }
   
   .fs-artist {
@@ -205,6 +274,10 @@
     margin: 0;
     color: rgba(255,255,255,0.7);
     transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
   }
   
   /* Barra Inferior (Progreso y Controles) */
@@ -264,7 +337,8 @@
     color: rgba(255,255,255,0.6);
     font-size: 0.9rem;
     font-weight: 500;
-    min-width: 45px;
+    min-width: 40px;
+    text-align: center;
   }
   
   .fs-progress-bar {
@@ -297,15 +371,46 @@
     margin-top: 5px;
   }
 
-  .fs-controls-side { width: 33.3%; display: flex; align-items: center; gap: 20px; }
+  .fs-controls-side { 
+    flex: 1; 
+    display: flex; 
+    align-items: center; 
+    gap: clamp(10px, 2vw, 15px);
+    min-width: 0;
+  }
   .fs-controls-side.right-side { justify-content: flex-end; }
+
+  .mixer-indicator {
+    font-size: 0.65rem;
+    font-weight: 900;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 3px 8px;
+    border-radius: 4px;
+    transition: all 0.5s ease;
+  }
+
+  .mixer-indicator.active-pulse {
+    color: #00ffff;
+    border-color: #00ffff;
+    box-shadow: 0 0 15px rgba(0,255,255,0.4);
+    animation: neonThrob 1.5s infinite ease-in-out;
+  }
+
+  @keyframes neonThrob {
+    0% { transform: scale(1); opacity: 0.7; text-shadow: 0 0 5px #00ffff; }
+    50% { transform: scale(1.1); opacity: 1; text-shadow: 0 0 20px #00ffff; }
+    100% { transform: scale(1); opacity: 0.7; text-shadow: 0 0 5px #00ffff; }
+  }
   
   .fs-controls {
-    width: 33.3%;
+    flex: 1.5;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 40px;
+    gap: clamp(10px, 4vw, 40px);
+    min-width: 0;
   }
 
   .fs-icon-btn {
@@ -330,6 +435,11 @@
   
   .fs-ctrl-btn.primary { color: rgba(255,255,255,0.8); }
   .fs-ctrl-btn.primary:hover { color: white; transform: scale(1.1); }
+
+  /* Estado activo para Shuffle y Repeat */
+  .fs-ctrl-btn.secondary.active-mode { color: #00ffff; }
+  .fs-ctrl-btn.secondary.active-mode:hover { color: #fff; }
+  .fs-ctrl-btn.secondary { position: relative; } /* Necesario para el "1" de Repeat One */
   
   .fs-play-pause {
     width: 70px;
@@ -353,36 +463,41 @@
 
   .fullscreen-tv-player.lyrics-mode .fs-content-wrapper {
     flex-direction: row;
-    align-items: flex-end; /* Mantener anclado abajo, NO 'center', para evitar que se levante todo */
+    align-items: flex-end; /* Anclado abajo como antes */
     justify-content: space-between;
-    gap: 10%;
+    gap: 5%;
   }
 
   .fullscreen-tv-player.lyrics-mode .fs-left-panel {
-    width: 45%;
+    width: 40%;
   }
 
   .fullscreen-tv-player.lyrics-mode .fs-main-info {
-    height: 180px; /* NUNCA CAMBIA LA ALTURA */
-    margin-bottom: 50px; /* NUNCA CAMBIA EL MARGEN */
+    height: 180px; 
+    margin-bottom: 50px;
+    display: block;
   }
 
   .fullscreen-tv-player.lyrics-mode .fs-cover {
-    bottom: 50px; /* Sube un poco, llegando justo a la mitad de la pantalla */
-    width: 280px; /* Más grande, proporcional a la subida */
+    position: absolute;
+    bottom: 50px; 
+    width: 280px; 
     height: 280px;
-    transition: all 0.7s cubic-bezier(0.25, 1, 0.5, 1); /* Sincronizado con el React State */
+    transition: all 0.7s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
   .fullscreen-tv-player.lyrics-mode .fs-text {
-    bottom: -20px; /* Se eleva 40px para no sobreponerse a la barra de progreso */
+    position: absolute;
+    bottom: -20px; 
     left: 0;
     width: 100%;
-    animation: textHideAndShow 1s cubic-bezier(0.25, 1, 0.5, 1) forwards; /* 1 segundo de coreografía exacta */
+    align-items: flex-start;
+    text-align: left;
+    animation: textHideAndShow 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
   }
 
   .fullscreen-tv-player.lyrics-mode .fs-title {
-    font-size: 1.9rem;
+    font-size: 1.8rem;
     line-height: 1.2;
   }
 
@@ -400,27 +515,50 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding-top: 25vh; /* Espacio superior para que la primera letra quede al medio */
+    padding-top: 25vh;
     padding-bottom: 25vh;
     overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    pointer-events: none; /* Desactiva el scroll manual */
+    pointer-events: none;
     mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
     
-    /* Estado Oculto por defecto */
     opacity: 0;
-    transform: translateY(100px); /* Viene desde abajo */
-    transition: all 0.4s ease 0s; /* Rápido y directo al salir */
+    transform: translateY(100px);
+    transition: all 0.4s ease 0s;
   }
 
   .fs-right-panel.visible {
     opacity: 1;
-    transform: translateY(0); /* Se desliza suavemente a su posición final */
-    transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1) 0.3s; /* Aparece DESPUÉS de que la imagen empieza a crecer */
+    transform: translateY(0);
+    /* SIN transition en base: evita el flash al limpiar clases del mixer */
+  }
+
+  /* Sincronizado con la transición del Mixer */
+  .fs-right-panel.visible.fading-out {
+    opacity: 0;
+    filter: blur(15px);
+    transform: scale(1.05) translateY(-20px);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
   }
   
+  /* Panel de letras ENTRANTE (durante el Mixer) */
+  .fs-right-panel.next-lyrics-panel {
+    opacity: 0;
+    filter: blur(15px);
+    transform: translateY(30px);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+    pointer-events: none;
+  }
+
+  .fs-right-panel.next-lyrics-panel.fading-in {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0);
+    transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
   .fs-right-panel::-webkit-scrollbar {
     display: none;
   }
@@ -545,3 +683,49 @@
     text-align: center;
     line-height: 1.5;
   }
+
+/* ==================================
+   RESPONSIVIDAD ADICIONAL
+   ================================== */
+@media (max-width: 1024px) {
+  .fs-controls { gap: 25px; }
+  .fs-play-pause { width: 60px; height: 60px; }
+  .fs-play-pause svg { width: 28px; height: 28px; }
+  .fs-title { font-size: 2rem; }
+  .fs-artist { font-size: 1.1rem; }
+}
+
+@media (max-width: 768px) {
+  .fullscreen-tv-player { padding: 40px 5%; }
+  .fs-controls { gap: 15px; }
+  .fs-ctrl-btn.primary svg { width: 26px; height: 26px; }
+  .fs-play-pause { width: 50px; height: 50px; }
+  .fs-play-pause svg { width: 24px; height: 24px; }
+  .mixer-indicator { font-size: 0.55rem; padding: 2px 6px; }
+  .fs-title { font-size: 1.6rem; }
+  .fs-artist { font-size: 1rem; }
+  .fs-cover { width: 140px; height: 140px; }
+  .fs-text { left: 160px; width: calc(100% - 170px); }
+}
+
+@media (max-width: 480px) {
+  .fs-controls-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+  }
+  .fs-controls-side { order: 2; width: 45%; flex: none; justify-content: center; }
+  .fs-controls-side.right-side { order: 3; width: 45%; flex: none; justify-content: center; }
+  .fs-controls { order: 1; width: 100%; flex: none; margin-bottom: 10px; gap: 20px; }
+  
+  .mixer-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    color: transparent;
+    border-width: 2px;
+  }
+}

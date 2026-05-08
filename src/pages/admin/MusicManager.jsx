@@ -23,24 +23,20 @@ export default function MusicManager() {
   const [isAISearching, setIsAISearching] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
 
-  React.useEffect(() => {
-    fetchSongs();
-  }, []);
-
-  const fetchSongs = async () => {
-    console.log("Cargando canciones de Supabase...");
+  const fetchSongs = useCallback(async () => {
     const { data, error } = await supabase
       .from('songs')
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (error) {
-      console.error("Error cargando canciones:", error);
-    } else {
-      console.log("Canciones cargadas:", data.length);
+    if (!error && data) {
       setSongs(data);
     }
-  };
+  }, []);
+
+  React.useEffect(() => {
+    fetchSongs();
+  }, [fetchSongs]);
 
   const handleDelete = async (song) => {
     if (!window.confirm(`¿Estás seguro de borrar "${song.title}"? Esta acción eliminará los archivos de Cloudflare y los datos de Supabase permanentemente.`)) return;
@@ -73,45 +69,63 @@ export default function MusicManager() {
 
   const fetchAIMetadata = async (title, artist) => {
     setIsAISearching(true);
+    const cleanArtist = artist.replace(/\s*-\s*Topic/i, '').trim();
+    const cleanTitle = title.trim();
+    
+    let newMeta = { ...metadata, title: cleanTitle, artist: cleanArtist };
+    
     try {
-      // 1. Buscar en MusicBrainz para Género y Clasificación
-      const mbRes = await fetch(`https://musicbrainz.org/ws/2/release?query=release:${encodeURIComponent(title)}%20AND%20artist:${encodeURIComponent(artist)}&fmt=json`);
-      const mbData = await mbRes.json();
-      
-      // 2. Buscar Fanart de Alta Calidad (Nivel IMDb) en TheAudioDB
-      const adbRes = await fetch(`https://www.theaudiodb.com/api/v1/json/2/search.php?s=${encodeURIComponent(artist)}`);
-      const adbData = await adbRes.json();
-      
-      let fanart = '';
-      let genre = 'Pop';
-      
-      if (adbData.artists && adbData.artists[0]) {
-        const art = adbData.artists[0];
-        fanart = art.strArtistFanart || art.strArtistWideThumb || art.strArtistThumb;
-        genre = art.strGenre || 'Pop';
+      // 1. ITUNES API (Para Portadas de Alta Calidad - Reemplaza a Spotify y es libre)
+      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + ' ' + cleanArtist)}&entity=song&limit=1`);
+      if (itunesRes.ok) {
+        const itunesData = await itunesRes.json();
+        if (itunesData.results?.length > 0) {
+          const track = itunesData.results[0];
+          // Convertimos la imagen de 100x100 a 600x600 para alta calidad
+          const highResCover = track.artworkUrl100.replace('100x100bb', '600x600bb');
+          setCoverUrl(highResCover);
+          newMeta.album = track.collectionName;
+          newMeta.year = track.releaseDate.split('-')[0];
+        }
       }
 
-      // 3. Buscar Letras en LRCLIB
-      const lyricsRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(title + ' ' + artist)}`);
-      const lyricsData = await lyricsRes.json();
-      
-      if (lyricsData && lyricsData.length > 0) {
-        const bestMatch = lyricsData[0];
-        setMetadata(prev => ({
-          ...prev,
-          title: bestMatch.trackName || prev.title,
-          artist: bestMatch.artistName || prev.artist,
-          album: bestMatch.albumName || prev.album,
-          lyrics: bestMatch.syncedLyrics || bestMatch.plainLyrics || '',
-          genre: genre,
-          background_url: fanart || prev.background_url
-        }));
-      } else {
-        setMetadata(prev => ({ ...prev, genre, background_url: fanart || prev.background_url }));
+      // 2. MUSICBRAINZ (Respaldo para Año y Álbum)
+      if (!newMeta.year || !newMeta.album) {
+        const mbRes = await fetch(`https://musicbrainz.org/ws/2/recording/?query=recording:${encodeURIComponent(cleanTitle)}%20AND%20artist:${encodeURIComponent(cleanArtist)}&fmt=json`);
+        if (mbRes.ok) {
+          const mbData = await mbRes.json();
+          if (mbData.recordings?.length > 0) {
+            const rec = mbData.recordings[0];
+            newMeta.album = newMeta.album || rec['releases']?.[0]?.title || '';
+            newMeta.year = newMeta.year || rec['releases']?.[0]?.date?.split('-')[0] || '';
+          }
+        }
       }
 
-    } catch (error) {
-      console.error("Error en búsqueda IA avanzada:", error);
+      // 3. THEAUDIODB (Fondos HD y Género)
+      const adbKey = import.meta.env.VITE_THEAUDIODB_API_KEY || '2';
+      const adbRes = await fetch(`https://www.theaudiodb.com/api/v1/json/${adbKey}/search.php?s=${encodeURIComponent(newMeta.artist)}`);
+      if (adbRes.ok) {
+        const adbData = await adbRes.json();
+        if (adbData.artists?.length > 0) {
+          const art = adbData.artists[0];
+          newMeta.genre = art.strGenre || newMeta.genre;
+          newMeta.background_url = art.strArtistFanart || art.strArtistWideThumb || '';
+        }
+      }
+
+      // 4. LRCLIB (Letras)
+      const lrcRes = await fetch(`https://lrclib.net/api/search?artist_name=${encodeURIComponent(newMeta.artist)}&track_name=${encodeURIComponent(newMeta.title)}`);
+      if (lrcRes.ok) {
+        const lrcData = await lrcRes.json();
+        if (lrcData.length > 0) {
+          newMeta.lyrics = lrcData[0].syncedLyrics || lrcData[0].plainLyrics || '';
+        }
+      }
+
+      setMetadata(newMeta);
+    } catch (err) {
+      console.error("Error en pipeline IA:", err);
     } finally {
       setIsAISearching(false);
     }
@@ -180,12 +194,15 @@ export default function MusicManager() {
 
   const handleCancel = () => {
     setFile(null);
-    setMetadata({ title: '', artist: '', album: '' });
+    setMetadata({ title: '', artist: '', album: '', lyrics: '', background_url: '', genre: '', year: '', artist_image: '' });
     setCoverUrl(null);
     setUploadStatus(null);
   };
 
+  const [filters, setFilters] = useState({ brightness: 100, contrast: 100, saturate: 100, blur: 0 });
+
   const handleUpload = async () => {
+    if (!file) return;
     setUploadStatus('uploading');
     
     try {
@@ -196,62 +213,63 @@ export default function MusicManager() {
       const mp3Path = `music/${safeTitle}_${timestamp}.mp3`;
       const mp3Url = await uploadToR2(file, mp3Path);
       
-      let finalCoverUrl = null;
-      
-      // 2. Si hay carátula, convertir base64 a Blob y subir a Cloudflare R2
-      if (coverUrl && coverUrl.startsWith('data:image')) {
-        const arr = coverUrl.split(',');
-        const mime = arr[0].match(/:(.*?);/)[1];
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while(n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-        }
-        const coverBlob = new Blob([u8arr], {type: mime});
-        
-        const coverPath = `covers/${safeTitle}_${timestamp}.jpg`;
-        finalCoverUrl = await uploadToR2(coverBlob, coverPath);
+      // 2. Subir Carátula o Video Loop a Cloudflare R2
+      let finalCoverUrl = coverUrl;
+      if (coverUrl && (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:'))) {
+        const isVideo = coverUrl.includes('video') || coverUrl.includes('.mp4');
+        const res = await fetch(coverUrl);
+        const blob = await res.blob();
+        const ext = isVideo ? 'mp4' : 'jpg';
+        const coverPath = `covers/${safeTitle}_${timestamp}.${ext}`;
+        finalCoverUrl = await uploadToR2(blob, coverPath);
       }
 
-      // 3. Guardar en Supabase Database
-      const { data, error } = await supabase
-        .from('songs')
-        .insert([
-          {
-            title: metadata.title,
-            artist: metadata.artist,
-            album: metadata.album,
-            url: mp3Url,
-            cover_url: finalCoverUrl,
-            lyrics: metadata.lyrics,
-            background_url: metadata.background_url,
-            genre: metadata.genre,
-            artist_image: metadata.background_url // Usamos el fanart como imagen de artista también
-          }
-        ]);
+      // NUEVO: Subir Fondo TV Personalizado a R2
+      let finalBackgroundUrl = metadata.background_url;
+      if (metadata.background_url && (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:'))) {
+        const res = await fetch(metadata.background_url);
+        const blob = await res.blob();
+        const bgPath = `backgrounds/${safeTitle}_bg_${timestamp}.jpg`;
+        finalBackgroundUrl = await uploadToR2(blob, bgPath);
+      }
+      
+      // 3. Guardar todo en Supabase
+      const { error } = await supabase.from('songs').insert([{
+        title: metadata.title,
+        artist: metadata.artist,
+        album: metadata.album,
+        genre: metadata.genre,
+        year: metadata.year ? parseInt(metadata.year) : null,
+        lyrics: metadata.lyrics,
+        cover_url: finalCoverUrl,
+        background_url: finalBackgroundUrl,
+        url: mp3Url,
+        is_video: finalCoverUrl?.endsWith('.mp4'),
+        visual_settings: filters // Guardamos los filtros aplicados
+      }]);
 
       if (error) throw error;
       
       setUploadStatus('success');
-      fetchSongs(); // Refrescar la lista inmediatamente
       setTimeout(() => {
         handleCancel(); // Limpiar el formulario
       }, 3000);
+      
     } catch (error) {
-      console.error("Error en subida:", error);
-      setUploadStatus('error');
+      console.error("Error completo en subida:", error);
+      alert("Error al subir la canción. Revisa la consola.");
+      setUploadStatus(null);
     }
   };
 
-  console.log("Renderizando MusicManager. Canciones en estado:", songs.length);
+
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
-          <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0' }}>Estación de Trabajo IA Pro</h2>
-          <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0 }}>Análisis profundo estilo IMDb, Fanarts de alta resolución y efectos visuales inteligentes.</p>
+          <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0' }}>Subir Nueva Música</h2>
+          <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0 }}>Usa nuestra IA para procesar tus archivos MP3 y generar visuales pro.</p>
         </div>
       </div>
 
@@ -304,27 +322,81 @@ export default function MusicManager() {
           <div style={{ display: 'flex', gap: '30px', marginBottom: '30px' }}>
             {/* Previsualización de Carátula con Animación de Destellos */}
             <div style={{ width: '220px', flexShrink: 0 }}>
-              <div className="premium-cover-container" style={{ 
+              <div className={`premium-cover-container ${metadata.animated ? 'ia-animated' : ''}`} style={{ 
                 position: 'relative', 
                 borderRadius: '12px', 
                 overflow: 'hidden',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+                aspectRatio: '1/1',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                background: '#000'
               }}>
                 {coverUrl ? (
                   <>
-                    <img src={coverUrl} alt="Carátula" className="animated-cover" style={{ width: '100%', display: 'block' }} />
+                    {coverUrl.includes('.mp4') || coverUrl.startsWith('data:video') ? (
+                      <video src={coverUrl} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <img 
+                        src={coverUrl} 
+                        alt="Carátula" 
+                        className="animated-cover" 
+                        style={{ 
+                          width: '100%', 
+                          display: 'block',
+                          filter: `brightness(${filters.brightness}%) contrast(${filters.contrast}%) saturate(${filters.saturate}%) blur(${filters.blur}px)`
+                        }} 
+                      />
+                    )}
                     <div className="shine-overlay"></div>
-                    <div className="sparkle-particles"></div>
+                    {metadata.animated && <div className="sparkle-particles"></div>}
                   </>
                 ) : (
-                  <div style={{ width: '100%', aspectRatio: '1/1', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'rgba(255,255,255,0.3)' }}>
+                  <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'rgba(255,255,255,0.3)' }}>
                     <ImageIcon size={40} style={{ marginBottom: '10px' }} />
-                    <span>Buscando Arte...</span>
+                    <span>Sin Visual</span>
                   </div>
                 )}
-                <div style={{ position: 'absolute', bottom: '10px', left: '10px', right: '10px', background: 'rgba(0,255,255,0.8)', color: 'black', padding: '4px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', textAlign: 'center' }}>
-                  ANIMATED LOOP CLASSIFIED
+              </div>
+              
+              <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* Filtros Visuales */}
+                <div style={{ background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', marginBottom: '5px' }}>
+                  <p style={{ fontSize: '0.65rem', color: '#00ffff', margin: '0 0 8px 0', fontWeight: 'bold' }}>FILTROS VISUALES</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <input type="range" min="50" max="200" value={filters.brightness} onChange={(e) => setFilters({...filters, brightness: e.target.value})} style={{ width: '100%', height: '4px' }} />
+                    <input type="range" min="50" max="200" value={filters.contrast} onChange={(e) => setFilters({...filters, contrast: e.target.value})} style={{ width: '100%', height: '4px' }} />
+                    <input type="range" min="50" max="200" value={filters.saturate} onChange={(e) => setFilters({...filters, saturate: e.target.value})} style={{ width: '100%', height: '4px' }} />
+                  </div>
                 </div>
+
+                <button 
+                  onClick={() => setMetadata({...metadata, animated: !metadata.animated})}
+                  style={{
+                    width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #00ffff',
+                    background: metadata.animated ? '#00ffff' : 'transparent',
+                    color: metadata.animated ? 'black' : '#00ffff',
+                    fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                  }}
+                >
+                  <Sparkles size={14} />
+                  {metadata.animated ? 'ANIMACIÓN ACTIVA' : 'PROCESAR ANIMACIÓN IA'}
+                </button>
+                
+                <label style={{
+                  width: '100%', padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textAlign: 'center', cursor: 'pointer',
+                  border: '1px dashed rgba(255,255,255,0.2)'
+                }}>
+                  SUBIR MP4 / LOOP
+                  <input type="file" accept="video/mp4" hidden onChange={async (e) => {
+                    const vidFile = e.target.files[0];
+                    if (vidFile) {
+                      const vidUrl = URL.createObjectURL(vidFile);
+                      setCoverUrl(vidUrl);
+                      // Aquí podrías subirlo a R2 directamente si quisieras
+                    }
+                  }} />
+                </label>
               </div>
             </div>
 
@@ -334,9 +406,23 @@ export default function MusicManager() {
                 <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <CheckCircle size={20} color="#00ffff" /> Metadatos de Clasificación IMDb
                 </h3>
-                <button onClick={handleCancel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-                  <X size={24} />
-                </button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    onClick={() => fetchAIMetadata(metadata.title, metadata.artist)}
+                    disabled={isAISearching}
+                    style={{ 
+                      background: 'rgba(0,255,255,0.1)', border: '1px solid #00ffff', color: '#00ffff', 
+                      padding: '5px 12px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '5px'
+                    }}
+                  >
+                    {isAISearching ? <Loader2 size={14} className="spinner" /> : <Sparkles size={14} />}
+                    Refrescar IA
+                  </button>
+                  <button onClick={handleCancel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
@@ -350,10 +436,14 @@ export default function MusicManager() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Género (Recomendaciones)</label>
-                  <input type="text" value={metadata.genre} onChange={(e) => setMetadata({...metadata, genre: e.target.value})} style={{ ...inputStyle, border: '1px solid #00ffff' }} />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Género</label>
+                  <input type="text" value={metadata.genre} onChange={(e) => setMetadata({...metadata, genre: e.target.value})} style={{ ...inputStyle, border: '1px solid rgba(0,255,255,0.3)' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Año</label>
+                  <input type="text" value={metadata.year} onChange={(e) => setMetadata({...metadata, year: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Álbum</label>
@@ -377,16 +467,25 @@ export default function MusicManager() {
             </div>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: '#00ffff', marginBottom: '10px' }}>
-                <ImageIcon size={16} /> Fondo TV IMDb-Style (Official Fanart)
+                <ImageIcon size={16} /> Fondo TV-Style
               </label>
               <div style={{ position: 'relative', height: '180px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
                 {metadata.background_url ? (
                   <img src={metadata.background_url} alt="Fanart" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <div style={{ height: '100%', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Buscando Fanart...</div>
+                  <div style={{ height: '100%', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sin fondo seleccionado</div>
                 )}
-                <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem' }}>
-                  HD BACKDROP
+                <div style={{ position: 'absolute', bottom: 10, right: 10, display: 'flex', gap: '5px' }}>
+                  <label style={{ background: 'rgba(0,255,255,0.8)', color: 'black', padding: '5px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                    SUBIR FONDO
+                    <input type="file" accept="image/*" hidden onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setMetadata({...metadata, background_url: url});
+                      }
+                    }} />
+                  </label>
                 </div>
               </div>
             </div>
@@ -415,75 +514,42 @@ export default function MusicManager() {
           </div>
         </div>
       )}
-
-      {/* Lista de Librería Actual */}
-      <div style={{ marginTop: '60px' }}>
-        <h3 style={{ fontSize: '1.5rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Music size={24} color="#00ffff" /> Librería Actual ({songs.length} canciones)
-        </h3>
-        
-        <div style={{ display: 'grid', gap: '15px' }}>
-          {songs.map(song => (
-            <div key={song.id} style={{ 
-              background: 'rgba(255,255,255,0.02)', 
-              border: '1px solid rgba(255,255,255,0.05)', 
-              borderRadius: '12px', 
-              padding: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <img src={song.cover_url} alt="" style={{ width: '50px', height: '50px', borderRadius: '6px', objectFit: 'cover' }} />
-                <div>
-                  <div style={{ fontWeight: 'bold' }}>{song.title}</div>
-                  <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>{song.artist} • {song.genre}</div>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => handleDelete(song)}
-                style={{ 
-                  background: 'rgba(255,50,50,0.1)', 
-                  border: 'none', 
-                  color: '#ff4444', 
-                  padding: '10px', 
-                  borderRadius: '8px', 
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-              >
-                <Trash2 size={18} /> Borrar
-              </button>
-            </div>
-          ))}
-
-          {songs.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.3)' }}>
-              No hay canciones en la librería todavía.
-            </div>
-          )}
-        </div>
-      </div>
-      
       <style>{`
         @keyframes spin { 100% { transform: rotate(360deg); } }
         
-        .premium-cover-container {
-          animation: float 6s ease-in-out infinite;
+        .premium-cover-container.ia-animated {
+          border: 2px solid #00ffff;
+          box-shadow: 0 0 30px rgba(0,255,255,0.4);
         }
 
         .animated-cover {
+          transition: transform 0.5s ease;
+        }
+
+        .ia-animated .animated-cover {
           animation: subtle-pulse 4s ease-in-out infinite;
+        }
+
+        .sparkle-particles {
+          position: absolute;
+          top: 0; left: 0; width: 100%; height: 100%;
+          background-image: radial-gradient(circle, #fff 1px, transparent 1px);
+          background-size: 20px 20px;
+          opacity: 0.3;
+          animation: sparkle-move 10s linear infinite;
+          pointer-events: none;
+        }
+
+        @keyframes sparkle-move {
+          from { background-position: 0 0; }
+          to { background-position: 100% 100%; }
         }
 
         .shine-overlay {
           position: absolute;
           top: 0; left: -100%;
           width: 50%; height: 100%;
-          background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent);
+          background: linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent);
           transform: skewX(-25deg);
           animation: shine 3s infinite;
         }
@@ -496,12 +562,7 @@ export default function MusicManager() {
 
         @keyframes subtle-pulse {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.03); }
-        }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
+          50% { transform: scale(1.05); }
         }
       `}</style>
     </div>
