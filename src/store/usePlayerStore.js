@@ -185,13 +185,18 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: (song) => {
-    const { currentSong, playbackHistory, deviceId, activeDeviceId, transferPlayback } = get();
+    const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback } = get();
     
-    // RECLAMO AGRESIVO: Si el usuario pulsa una canción, quiere escucharla AQUÍ.
-    // Solo transferimos si no somos ya el dispositivo activo.
-    if (activeDeviceId !== deviceId) {
-      console.log("[Connect] ⚡ Tomando el control para este dispositivo...");
-      transferPlayback();
+    // LÓGICA ESTRICTA: 
+    // Si no hay nadie activo O el sistema está en pausa total, tomamos el control para sonar aquí.
+    // Pero si alguien YA está sonando (isPlaying: true), no robamos el audio, solo cambiamos la canción remotamente.
+    if (!activeDeviceId || !isPlaying) {
+      if (activeDeviceId !== deviceId) {
+        console.log("[Connect] ⚡ Sistema libre detectado. Tomando el control...");
+        transferPlayback();
+      }
+    } else {
+      console.log(`[Remote] 🕹️ Actuando como mando: Cambiando canción en el dispositivo maestro (${activeDeviceId})`);
     }
 
     // Si ya hay una canción sonando, la guardamos en el historial antes de cambiar
@@ -201,7 +206,7 @@ export const usePlayerStore = create((set, get) => ({
 
     set({ currentSong: song, isPlaying: true });
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().sendCommand('PLAY_SONG', { songId: song.id });
+    get().sendCommand('PLAY_SONG', { song });
   },
 
   togglePlay: () => {
