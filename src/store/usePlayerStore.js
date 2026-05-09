@@ -108,8 +108,20 @@ export const usePlayerStore = create((set, get) => ({
           
           switch (command) {
             case 'PLAY_SONG':
-              const song = get().queue.find(s => s.id === data.songId);
-              if (song) set({ currentSong: song, isPlaying: true, activeDeviceId: data.activeDeviceId });
+              const localSong = get().queue.find(s => s.id === data.songId);
+              if (localSong) {
+                set({ currentSong: localSong, isPlaying: true, activeDeviceId: data.activeDeviceId });
+                // FORZAMOS descarga de letras en el ESPEJO
+                if (!localSong.lyrics) get().fetchSongDetails(data.songId);
+              } else {
+                // Si la canción no está en la cola, la buscamos en la DB
+                supabase.from('songs').select('*').eq('id', data.songId).single().then(({ data: remoteSong }) => {
+                  if (remoteSong) {
+                    set({ currentSong: remoteSong, isPlaying: true, activeDeviceId: data.activeDeviceId });
+                    if (!remoteSong.lyrics) get().fetchSongDetails(data.songId);
+                  }
+                });
+              }
               break;
             case 'TOGGLE_PLAY':
               set({ isPlaying: data.isPlaying, activeDeviceId: data.activeDeviceId });
@@ -125,6 +137,7 @@ export const usePlayerStore = create((set, get) => ({
               });
               break;
             case 'SYNC_SETTINGS':
+              console.log("[Musicfy Connect] Aplicando nuevos ajustes visuales...", data);
               import('./useSettingsStore').then(({ useSettingsStore }) => {
                 useSettingsStore.setState({ ...data });
               });
@@ -140,6 +153,21 @@ export const usePlayerStore = create((set, get) => ({
             name: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Navegador Web',
             lastSeen: new Date().toISOString()
           });
+          
+          // Difundir ajustes iniciales si somos el maestro
+          if (get().activeDeviceId === get().deviceId) {
+            import('./useSettingsStore').then(({ useSettingsStore }) => {
+              const s = useSettingsStore.getState();
+              get().sendCommand('SYNC_SETTINGS', {
+                accentColor: s.accentColor,
+                accentOpacity: s.accentOpacity,
+                animatedCovers: s.animatedCovers,
+                crossfadeEnabled: s.crossfadeEnabled,
+                crossfadeTime: s.crossfadeTime
+              });
+            });
+          }
+          
           get().fetchRemoteState(userId);
         }
         if (status === 'CHANNEL_ERROR') {

@@ -327,7 +327,7 @@ export default function PlayerBar() {
         activeLyric.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [currentTime, showLyrics]);
+  }, [localCurrentTime, showLyrics]);
 
   // Scroll automático de letras ENTRANTES (para que al tomar el relevo esté en su sitio)
   const nextLyricsContainerRef = useRef(null);

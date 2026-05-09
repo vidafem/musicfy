@@ -82,14 +82,21 @@ export const useSettingsStore = create(
 );
 
 // --- SINCRONIZACIÓN AUTOMÁTICA DE AJUSTES ---
-// Escuchamos cualquier cambio en este store y lo enviamos a los demás dispositivos
 useSettingsStore.subscribe((state, prevState) => {
-    // Importamos dinámicamente para evitar dependencias circulares
+    // Solo emitimos si algo realmente cambió para evitar bucles
+    const hasChanged = 
+        state.accentColor !== prevState.accentColor ||
+        state.accentOpacity !== prevState.accentOpacity ||
+        state.animatedCovers !== prevState.animatedCovers ||
+        state.crossfadeEnabled !== prevState.crossfadeEnabled ||
+        state.crossfadeTime !== prevState.crossfadeTime;
+
+    if (!hasChanged) return;
+
     import('./usePlayerStore').then(({ usePlayerStore }) => {
         const sendCommand = usePlayerStore.getState().sendCommand;
         if (sendCommand) {
-            // Solo enviamos si realmente algo cambió y no fue una actualización masiva
-            // Enviamos los campos clave para no saturar
+            console.log("[Musicfy Connect] Difundiendo nuevos ajustes...");
             sendCommand('SYNC_SETTINGS', {
                 accentColor: state.accentColor,
                 accentOpacity: state.accentOpacity,
