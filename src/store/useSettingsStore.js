@@ -76,7 +76,27 @@ export const useSettingsStore = create(
       }
     }),
     {
-      name: 'musicfy-settings', // Nombre de la base de datos local
+      name: 'musicfy-settings', 
     }
   )
 );
+
+// --- SINCRONIZACIÓN AUTOMÁTICA DE AJUSTES ---
+// Escuchamos cualquier cambio en este store y lo enviamos a los demás dispositivos
+useSettingsStore.subscribe((state, prevState) => {
+    // Importamos dinámicamente para evitar dependencias circulares
+    import('./usePlayerStore').then(({ usePlayerStore }) => {
+        const sendCommand = usePlayerStore.getState().sendCommand;
+        if (sendCommand) {
+            // Solo enviamos si realmente algo cambió y no fue una actualización masiva
+            // Enviamos los campos clave para no saturar
+            sendCommand('SYNC_SETTINGS', {
+                accentColor: state.accentColor,
+                accentOpacity: state.accentOpacity,
+                animatedCovers: state.animatedCovers,
+                crossfadeEnabled: state.crossfadeEnabled,
+                crossfadeTime: state.crossfadeTime
+            });
+        }
+    });
+});

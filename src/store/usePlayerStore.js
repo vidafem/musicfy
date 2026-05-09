@@ -95,6 +95,7 @@ export const usePlayerStore = create((set, get) => ({
       .on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
         const devices = Object.values(newState).flat();
+        console.log("[Musicfy Connect] Dispositivos sincronizados:", devices.length);
         set({ onlineDevices: devices });
       })
       // B. Escuchar órdenes de otros dispositivos (Protocolo de Comandos Pro)
@@ -103,7 +104,7 @@ export const usePlayerStore = create((set, get) => ({
         const myId = get().deviceId;
 
         if (senderId !== myId) {
-          console.log(`[Musicfy Connect] Comando recibido: ${command}`, data);
+          console.log(`[Musicfy Connect] Comando recibido de ${senderId}: ${command}`, data);
           
           switch (command) {
             case 'PLAY_SONG':
@@ -123,10 +124,16 @@ export const usePlayerStore = create((set, get) => ({
                 activeDeviceId: data.activeDeviceId
               });
               break;
+            case 'SYNC_SETTINGS':
+              import('./useSettingsStore').then(({ useSettingsStore }) => {
+                useSettingsStore.setState({ ...data });
+              });
+              break;
           }
         }
       })
       .subscribe(async (status) => {
+        console.log(`[Musicfy Connect] Estado de suscripción: ${status}`);
         if (status === 'SUBSCRIBED') {
           await channel.track({
             id: get().deviceId,
@@ -134,6 +141,10 @@ export const usePlayerStore = create((set, get) => ({
             lastSeen: new Date().toISOString()
           });
           get().fetchRemoteState(userId);
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error("[Musicfy Connect] Error crítico en el canal. Reintentando...");
+          setTimeout(() => get().initConnect(userId), 3000);
         }
       });
 
