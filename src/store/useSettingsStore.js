@@ -15,6 +15,8 @@ export const useSettingsStore = create(
       likedSongs: [], // Array de IDs de canciones marcadas con ❤️
       accentColor: '#00ffff', // Color de neón por defecto
       accentOpacity: 1,      // Opacidad del sistema
+      isShuffled: false,
+      repeatMode: 'none',    // 'none', 'one', 'all'
 
       // ACCIONES PARA MODIFICAR ESTADOS
       toggleAnimatedCovers: () => {
@@ -46,6 +48,16 @@ export const useSettingsStore = create(
         get().saveSettingsToCloud();
       },
 
+      setShuffle: (val) => {
+        set({ isShuffled: val });
+        get().saveSettingsToCloud();
+      },
+
+      setRepeatMode: (mode) => {
+        set({ repeatMode: mode });
+        get().saveSettingsToCloud();
+      },
+
       // Función para aplicar ajustes recibidos de otro dispositivo
       applyRemoteSettings: (newSettings) => {
         window._isRemoteSettingsUpdate = true;
@@ -67,7 +79,9 @@ export const useSettingsStore = create(
           crossfadeEnabled: get().crossfadeEnabled,
           crossfadeTime: get().crossfadeTime,
           equalizerEnabled: get().equalizerEnabled,
-          eqGains: get().eqGains
+          eqGains: get().eqGains,
+          isShuffled: get().isShuffled,
+          repeatMode: get().repeatMode
         };
 
         await supabase

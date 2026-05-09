@@ -21,9 +21,6 @@ export const usePlayerStore = create((set, get) => ({
   currentTime: 0,
   duration: 0,
 
-  // Shuffle y Repeat
-  isShuffled: false,
-  repeatMode: 'none', // 'none' | 'one' | 'all'
   onlineDevices: [],
   connectChannel: null,
 
@@ -206,27 +203,46 @@ export const usePlayerStore = create((set, get) => ({
   setDuration: (duration) => set({ duration }),
   setQueue: (songs) => set({ queue: songs }),
 
-  toggleShuffle: () => set((state) => ({ isShuffled: !state.isShuffled })),
+  toggleShuffle: () => {
+    const { useSettingsStore } = require('./useSettingsStore');
+    const settings = useSettingsStore.getState();
+    const nextShuffle = !settings.isShuffled;
+    
+    let newQueue = [...get().queue];
+    
+    if (nextShuffle) {
+      // Algoritmo Fisher-Yates para mezclar la cola físicamente
+      for (let i = newQueue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newQueue[i], newQueue[j]] = [newQueue[j], newQueue[i]];
+      }
+    } else {
+      newQueue.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    
+    set({ queue: newQueue });
+    settings.setShuffle(nextShuffle);
+  },
 
-  toggleRepeat: () => set((state) => {
+  toggleRepeat: () => {
+    const { useSettingsStore } = require('./useSettingsStore');
+    const settings = useSettingsStore.getState();
     const next = { none: 'one', one: 'all', all: 'none' };
-    return { repeatMode: next[state.repeatMode] };
-  }),
+    settings.setRepeatMode(next[settings.repeatMode]);
+  },
 
   playNext: () => {
-    const { currentSong, queue, isShuffled, repeatMode, deviceId } = get();
+    const { useSettingsStore } = require('./useSettingsStore');
+    const { repeatMode } = useSettingsStore.getState();
+    const { currentSong, queue } = get();
     if (!currentSong || queue.length === 0) return;
 
+    // Con la cola físicamente mezclada, solo seguimos el índice
     const currentIndex = queue.findIndex(s => s.id === currentSong.id);
     let nextSong;
 
     if (repeatMode === 'one') {
       nextSong = { ...currentSong };
-    } else if (isShuffled) {
-      let randomIndex;
-      do { randomIndex = Math.floor(Math.random() * queue.length); } 
-      while (randomIndex === currentIndex && queue.length > 1);
-      nextSong = queue[randomIndex];
     } else if (currentIndex < queue.length - 1) {
       nextSong = queue[currentIndex + 1];
     } else if (repeatMode === 'all') {

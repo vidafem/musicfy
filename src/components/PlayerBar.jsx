@@ -28,8 +28,8 @@ export default function PlayerBar() {
   const setDuration = usePlayerStore(state => state.setDuration);
   const fetchSongs = usePlayerStore(state => state.fetchSongs);
   const playSong = usePlayerStore(state => state.playSong);
-  const isShuffled = usePlayerStore(state => state.isShuffled);
-  const repeatMode = usePlayerStore(state => state.repeatMode);
+  const isShuffled = useSettingsStore(state => state.isShuffled);
+  const repeatMode = useSettingsStore(state => state.repeatMode);
   const toggleShuffle = usePlayerStore(state => state.toggleShuffle);
   const toggleRepeat = usePlayerStore(state => state.toggleRepeat);
   
