@@ -19,14 +19,24 @@ export default function SettingsSidebar({ isOpen, onClose }) {
     clearCache 
   } = useSettingsStore();
 
+  const [syncStatus, setSyncStatus] = React.useState('idle'); // 'idle', 'syncing', 'success'
+
   const handleSyncProfile = async () => {
-    await saveSettingsToCloud();
-    // Forzamos un broadcast de los ajustes a otros dispositivos
-    const { usePlayerStore } = await import('../store/usePlayerStore');
-    usePlayerStore.getState().sendCommand('SYNC_SETTINGS', {
-      accentColor, accentOpacity, animatedCovers, crossfadeEnabled, crossfadeTime, equalizerEnabled, eqGains
-    });
-    alert('¡Perfil Sincronizado! Configuración y Ecualizador guardados. 🚀');
+    setSyncStatus('syncing');
+    try {
+      await saveSettingsToCloud();
+      // Forzamos un broadcast de los ajustes a otros dispositivos
+      const { usePlayerStore } = await import('../store/usePlayerStore');
+      usePlayerStore.getState().sendCommand('SYNC_SETTINGS', {
+        accentColor, accentOpacity, animatedCovers, crossfadeEnabled, crossfadeTime, equalizerEnabled, eqGains
+      });
+      console.log("[Connect] ✅ [TAG:CONFIRMADO] Sincronización de perfil exitosa en todos los dispositivos vinculados.");
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    } catch (err) {
+      console.error("[Connect] ❌ Error en sincronización:", err);
+      setSyncStatus('idle');
+    }
   };
 
   const handleEqChange = (index, value) => {
@@ -205,17 +215,41 @@ export default function SettingsSidebar({ isOpen, onClose }) {
             </div>
           </div>
 
-          <div className="settings-section">
-            <h3>Sincronización Cloud</h3>
-            <div className="setting-item action-item" onClick={handleSyncProfile} style={{cursor: 'pointer'}}>
-              <div className="setting-info">
-                <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>
-                  <RefreshCw size={18} style={{verticalAlign: 'middle', marginRight: '8px'}}/> 
-                  Sincronizar Perfil en la Nube
-                </span>
-                <p>Guarda tus colores y ajustes para verlos en todos tus dispositivos.</p>
-              </div>
+          <div className="settings-section" style={{ border: 'none' }}>
+            <div 
+              className="sync-minimal-btn" 
+              onClick={syncStatus === 'idle' ? handleSyncProfile : null} 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 15px',
+                cursor: 'pointer',
+                borderRadius: '12px',
+                background: 'rgba(255,255,255,0.03)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              <RefreshCw 
+                size={18} 
+                style={{ 
+                  color: syncStatus === 'success' ? '#4caf50' : 'var(--accent-color)',
+                  transition: 'all 0.3s ease',
+                  animation: syncStatus === 'syncing' ? 'spin 1s linear infinite' : 'none'
+                }}
+              />
+              <span style={{ 
+                color: syncStatus === 'success' ? '#4caf50' : 'white',
+                fontSize: '0.9rem',
+                fontWeight: '700',
+                transition: 'all 0.3s ease'
+              }}>
+                {syncStatus === 'success' ? 'Ajustes Sincronizados' : syncStatus === 'syncing' ? 'Sincronizando...' : 'Sincronizar ajustes'}
+              </span>
             </div>
+            <style>{`
+              @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
           </div>
 
           <div className="settings-section">
