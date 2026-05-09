@@ -24,44 +24,38 @@ export const usePlayerStore = create((set, get) => ({
   // Shuffle y Repeat
   isShuffled: false,
   repeatMode: 'none', // 'none' | 'one' | 'all'
+  onlineDevices: [],
+  connectChannel: null,
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT) ---
   
-  // 1. Enviar mi estado a la nube
-  syncToCloud: async (forceUpdate = false) => {
-    const { currentSong, isPlaying, currentTime, deviceId, activeDeviceId } = get();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Si no soy el dispositivo activo y no es un forceUpdate, no subo nada
-    if (!user || (!forceUpdate && activeDeviceId && activeDeviceId !== deviceId)) return;
+  // 1. Enviar mi estado a la nube (Respaldo en DB)
+  broadcastState: () => {
+    const { connectChannel, currentSong, isPlaying, currentTime, deviceId, activeDeviceId } = get();
+    if (!connectChannel || (activeDeviceId && activeDeviceId !== deviceId)) return;
 
-    const updateData = {
-      is_playing: isPlaying,
-      current_playback_time: currentTime,
-      active_device_id: activeDeviceId || deviceId,
-      sync_source_device: deviceId,
-      last_seen: new Date().toISOString()
-    };
+    connectChannel.send({
+      type: 'broadcast',
+      event: 'sync_state',
+      payload: {
+        deviceId,
+        state: {
+          songId: currentSong?.id,
+          isPlaying,
+          currentTime,
+          activeDeviceId: activeDeviceId || deviceId
+        }
+      }
+    });
 
-    if (currentSong?.id) {
-      updateData.last_played_id = currentSong.id;
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .update(updateData)
-      .eq('id', user.id);
-
-    if (error) console.error("Error en sincronización Connect:", error);
+    // Actualizamos la DB como respaldo cada cierto tiempo (opcionalmente aquí)
   },
 
   // 1.1 Recuperar estado inicial de la nube
   fetchRemoteState: async (userId) => {
-    // Esperar un momento a que la cola se cargue si está vacía
     if (get().queue.length === 0) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-
     const { data, error } = await supabase
       .from('profiles')
       .select('last_played_id, is_playing, current_playback_time, active_device_id')
@@ -69,10 +63,8 @@ export const usePlayerStore = create((set, get) => ({
       .single();
 
     if (!error && data && data.last_played_id) {
-      console.log("Estado remoto recuperado:", data);
       const { queue } = get();
       const remoteSong = queue.find(s => s.id === data.last_played_id);
-      
       if (remoteSong) {
         set({ 
           currentSong: remoteSong, 
@@ -85,53 +77,71 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   // 2. Suscribirse a cambios de otros dispositivos
-  subscribeToRemoteControl: (userId) => {
+  // 2. Iniciar el canal de comunicación rápida (Connect Pro)
+  initConnect: (userId) => {
     if (!userId) return;
+    if (get().connectChannel) return;
 
-    // Al iniciar, pedimos el estado actual de la nube
-    get().fetchRemoteState(userId);
+    const channel = supabase.channel(`musicfy_connect_${userId}`, {
+      config: {
+        presence: { key: get().deviceId },
+      },
+    });
 
-    const channel = supabase
-      .channel(`profile_sync_${userId}`)
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'profiles', 
-        filter: `id=eq.${userId}` 
-      }, (payload) => {
-        console.log("Cambio detectado en otro dispositivo:", payload.new);
-        const data = payload.new;
-        const myDeviceId = get().deviceId;
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState();
+        const devices = Object.values(newState).flat();
+        set({ onlineDevices: devices });
+      })
+      .on('broadcast', { event: 'sync_state' }, ({ payload }) => {
+        const { deviceId: senderId, state } = payload;
+        const myId = get().deviceId;
 
-        // Si el cambio viene de OTRO dispositivo, nos sincronizamos
-        if (data.sync_source_device !== myDeviceId) {
+        if (senderId !== myId) {
           const { queue, currentSong } = get();
-          
-          // Si cambió la canción
-          if (data.last_played_id && data.last_played_id !== currentSong?.id) {
-            const newSong = queue.find(s => s.id === data.last_played_id);
-            if (newSong) {
-              set({ currentSong: newSong, isPlaying: data.is_playing, activeDeviceId: data.active_device_id });
-            }
-          } else {
-            // Si solo cambió el estado de play/pausa o progreso
-            set({ 
-              isPlaying: data.is_playing, 
-              currentTime: data.current_playback_time,
-              activeDeviceId: data.active_device_id
-            });
+          if (state.songId && state.songId !== currentSong?.id) {
+            const newSong = queue.find(s => s.id === state.songId);
+            if (newSong) set({ currentSong: newSong });
           }
+          set({ 
+            isPlaying: state.isPlaying,
+            currentTime: state.currentTime,
+            activeDeviceId: state.activeDeviceId
+          });
         }
       })
-      .subscribe();
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            id: get().deviceId,
+            name: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Navegador Web',
+            lastSeen: new Date().toISOString()
+          });
+          get().fetchRemoteState(userId);
+        }
+      });
 
-    return () => supabase.removeChannel(channel);
+    set({ connectChannel: channel });
+    return () => {
+      supabase.removeChannel(channel);
+      set({ connectChannel: null });
+    };
   },
 
-  // Reclamar el audio para este dispositivo
+  // 4. Reclamar el audio
   transferPlayback: () => {
-    set({ activeDeviceId: get().deviceId });
-    get().syncToCloud(true);
+    const myId = get().deviceId;
+    set({ activeDeviceId: myId });
+    get().broadcastState();
+    
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').update({ 
+          active_device_id: myId
+        }).eq('id', user.id);
+      }
+    });
   },
 
   fetchSongs: async () => {
@@ -164,21 +174,20 @@ export const usePlayerStore = create((set, get) => ({
   playSong: (song) => {
     set({ currentSong: song, isPlaying: true, activeDeviceId: get().deviceId });
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().syncToCloud();
+    get().broadcastState();
   },
 
   togglePlay: () => {
     const newState = !get().isPlaying;
     set({ isPlaying: newState, activeDeviceId: get().deviceId });
-    get().syncToCloud();
+    get().broadcastState();
   },
 
   setVolume: (volume) => set({ volume }),
   
   setCurrentTime: (time, fromUI = false) => {
     set({ currentTime: time });
-    // Solo sincronizamos al hacer seek manual para no saturar la red
-    if (fromUI) get().syncToCloud();
+    if (fromUI) get().broadcastState();
   },
 
   setDuration: (duration) => set({ duration }),
@@ -214,7 +223,7 @@ export const usePlayerStore = create((set, get) => ({
     if (nextSong) {
       set({ currentSong: nextSong, isPlaying: true, activeDeviceId: deviceId });
       if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
-      get().syncToCloud();
+      get().broadcastState();
     }
   },
 
@@ -224,7 +233,7 @@ export const usePlayerStore = create((set, get) => ({
 
     if (currentTime > 3) {
       set({ currentTime: 0 });
-      get().syncToCloud();
+      get().broadcastState();
       return;
     }
 
@@ -233,7 +242,7 @@ export const usePlayerStore = create((set, get) => ({
       const prevS = queue[currentIndex - 1];
       set({ currentSong: prevS, isPlaying: true, activeDeviceId: deviceId });
       if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
-      get().syncToCloud();
+      get().broadcastState();
     }
   }
 }));

@@ -33,13 +33,16 @@ export default function PlayerBar() {
   const toggleShuffle = usePlayerStore(state => state.toggleShuffle);
   const toggleRepeat = usePlayerStore(state => state.toggleRepeat);
   
-  // Connect State
+  // Connect Pro State
   const deviceId = usePlayerStore(state => state.deviceId);
   const activeDeviceId = usePlayerStore(state => state.activeDeviceId);
-  const subscribeToRemoteControl = usePlayerStore(state => state.subscribeToRemoteControl);
+  const initConnect = usePlayerStore(state => state.initConnect);
+  const onlineDevices = usePlayerStore(state => state.onlineDevices);
   const transferPlayback = usePlayerStore(state => state.transferPlayback);
-  const syncToCloud = usePlayerStore(state => state.syncToCloud);
+  const broadcastState = usePlayerStore(state => state.broadcastState);
   const user = useAuthStore(state => state.user);
+  
+  const [showDeviceSelector, setShowDeviceSelector] = useState(false);
 
   const crossfadeEnabled = useSettingsStore(state => state.crossfadeEnabled);
   const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
@@ -218,33 +221,29 @@ export default function PlayerBar() {
     setTimeout(() => setErrorMessage(null), 6000);
   };
 
-  // Cargar música real y Activar Sincronización Connect
+  // Cargar música real y Activar Connect Pro
   useEffect(() => {
     fetchSongs();
     
-    // Iniciar escucha de control remoto
     if (user?.id) {
-      const unsubscribe = subscribeToRemoteControl(user.id);
-      return () => unsubscribe();
+      const cleanup = initConnect(user.id);
+      return () => cleanup && cleanup();
     }
   }, [user?.id]);
 
-  // Actualizar nube periódicamente (cada 10s si soy el maestro)
+  // Difundir progreso en tiempo real (solo el maestro, cada 3s para fluidez)
   useEffect(() => {
     if (!isPlaying || activeDeviceId !== deviceId) return;
     const interval = setInterval(() => {
-      syncToCloud();
-    }, 10000);
+      broadcastState();
+    }, 3000);
     return () => clearInterval(interval);
   }, [isPlaying, activeDeviceId, deviceId]);
 
-  // Detectar si alguien más está reproduciendo al iniciar
+  // Detectar si alguien más está reproduciendo al iniciar (Opcional: podemos quitarlo o dejarlo como log)
   useEffect(() => {
     if (activeDeviceId && activeDeviceId !== deviceId) {
-      setShowTransferPrompt(true);
-      // Auto-ocultar después de 10 segundos para no molestar
-      const timer = setTimeout(() => setShowTransferPrompt(false), 10000);
-      return () => clearTimeout(timer);
+      console.log("Música sonando en otro dispositivo:", activeDeviceId);
     }
   }, [activeDeviceId]);
 
@@ -490,24 +489,7 @@ export default function PlayerBar() {
             </div>
           )}
 
-          {/* PROMPT DE TRANSFERENCIA (CONNECT) */}
-          {showTransferPrompt && (
-            <div className="transfer-prompt-toast">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div className="pulse-icon">
-                  <Smartphone size={20} color="var(--accent-color)" />
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 'bold' }}>¿Continuar aquí?</p>
-                  <p style={{ margin: 0, fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>Suonando en otro dispositivo</p>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => setShowTransferPrompt(false)} className="btn-secondary-sm">Ignorar</button>
-                <button onClick={() => { transferPlayback(); setShowTransferPrompt(false); }} className="btn-primary-sm">Escuchar Aquí</button>
-              </div>
-            </div>
-          )}
+          {/* PROMPT DE TRANSFERENCIA ELIMINADO EN FAVOR DEL SELECTOR MANUAL */}
 
           <div className="fs-progress-container">
             <span className="fs-time">{formatTime(uiTransition ? nextCurrentTime : currentTime)}</span>
@@ -538,14 +520,50 @@ export default function PlayerBar() {
                 </span>
               )}
               
-              {/* INDICADOR DE CONNECT */}
-              <div 
-                className={`connect-indicator ${activeDeviceId === deviceId ? 'active' : ''}`}
-                onClick={transferPlayback}
-                title={activeDeviceId === deviceId ? "Sonando en este dispositivo" : "Modo Espejo (Click para sonar aquí)"}
-              >
-                {activeDeviceId === deviceId ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                <span>{activeDeviceId === deviceId ? "ACTIVO" : "ESPEJO"}</span>
+              {/* INDICADOR DE CONNECT Y SELECTOR DE DISPOSITIVOS */}
+              <div className="connect-wrapper">
+                <div 
+                  className={`connect-indicator ${activeDeviceId === deviceId ? 'active' : ''}`}
+                  onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+                >
+                  {activeDeviceId === deviceId ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                  <span>{activeDeviceId === deviceId ? "ACTIVO" : "ESPEJO"}</span>
+                </div>
+
+                {showDeviceSelector && (
+                  <div className="device-selector-popup">
+                    <div className="device-selector-header">
+                      <span>Tus Dispositivos</span>
+                      <button onClick={() => setShowDeviceSelector(false)}><X size={14}/></button>
+                    </div>
+                    <div className="device-list">
+                      {onlineDevices.map((dev) => (
+                        <div 
+                          key={dev.id} 
+                          className={`device-item ${activeDeviceId === dev.id ? 'active' : ''}`}
+                          onClick={() => {
+                            if (dev.id === deviceId) transferPlayback();
+                            // Si queremos transferir a OTRO, necesitaríamos enviar orden, por ahora permitimos reclamar audio
+                            setShowDeviceSelector(false);
+                          }}
+                        >
+                          {dev.name === 'Móvil' ? <Smartphone size={18}/> : <Monitor size={18}/>}
+                          <div className="device-info">
+                            <span className="dev-name">{dev.id === deviceId ? `${dev.name} (Actual)` : dev.name}</span>
+                            <span className="dev-status">{activeDeviceId === dev.id ? 'Escuchando' : 'Conectado'}</span>
+                          </div>
+                          {activeDeviceId === dev.id && <div className="playing-bars"><span></span><span></span><span></span></div>}
+                        </div>
+                      ))}
+                      {onlineDevices.length === 0 && <p className="no-devices">No hay otros dispositivos online</p>}
+                    </div>
+                    {activeDeviceId !== deviceId && (
+                      <button className="transfer-full-btn" onClick={() => { transferPlayback(); setShowDeviceSelector(false); }}>
+                        Reproducir en este dispositivo
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
