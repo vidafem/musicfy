@@ -160,18 +160,51 @@ export default function PlayerBar() {
   }, [currentSong?.id, activeChannel]);
 
 
-  // Sincronizar PLAY/PAUSE global
+  // Sincronizar PLAY/PAUSE global y CONTROL DE AUDIO
   useEffect(() => {
     const main = audioARef.current;
     const sec = audioBRef.current;
+    if (!main || !sec) return;
+
+    // REGLA DE ORO: Solo suena si soy el dispositivo ACTIVO
+    const isMaster = activeDeviceId === deviceId;
+
     if (isPlaying) {
-      if (activeChannel === 'A') main?.play().catch(() => {});
-      else sec?.play().catch(() => {});
+      if (isMaster) {
+        if (activeChannel === 'A') main.play().catch(() => {});
+        else sec.play().catch(() => {});
+        main.muted = false;
+        sec.muted = false;
+      } else {
+        // MODO ESPEJO: Silencio total y pausa
+        main.pause();
+        sec.pause();
+        main.muted = true;
+        sec.muted = true;
+      }
     } else {
-      main?.pause();
-      sec?.pause();
+      main.pause();
+      sec.pause();
     }
-  }, [isPlaying, activeChannel]);
+  }, [isPlaying, activeChannel, activeDeviceId, deviceId]);
+
+  // RELOJ DE PREDICCIÓN PARA ESPEJOS (Mantiene el tiempo fluido entre broadcasts)
+  useEffect(() => {
+    if (activeDeviceId === deviceId || !isPlaying) return;
+
+    const interval = setInterval(() => {
+      setLocalCurrentTime(prev => prev + 0.1);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, activeDeviceId, deviceId]);
+
+  // Sincronizar localCurrentTime cuando el store cambie (vía Broadcast)
+  useEffect(() => {
+    if (activeDeviceId !== deviceId) {
+      setLocalCurrentTime(currentTime);
+    }
+  }, [currentTime, activeDeviceId, deviceId]);
 
   const [nextCurrentTime, setNextCurrentTime] = useState(0);
   const [nextDuration, setNextDuration] = useState(0);
@@ -194,7 +227,10 @@ export default function PlayerBar() {
                                (activeChannel === 'B' && audio === audioARef.current);
     if (isMainChannel) {
       setLocalCurrentTime(audio.currentTime);
-      setCurrentTime(audio.currentTime);
+      // SOLO EL MAESTRO dicta el tiempo global para evitar rebotes
+      if (activeDeviceId === deviceId) {
+        setCurrentTime(audio.currentTime);
+      }
       if (audio.duration) setDuration(audio.duration);
     }
     // Rastrear el tiempo del canal secundario para la barra de progreso

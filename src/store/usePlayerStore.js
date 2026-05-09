@@ -29,26 +29,29 @@ export const usePlayerStore = create((set, get) => ({
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT) ---
   
-  // 1. Enviar mi estado a la nube (Respaldo en DB)
-  broadcastState: () => {
-    const { connectChannel, currentSong, isPlaying, currentTime, deviceId, activeDeviceId } = get();
+  // 2. Enviar comandos o estado a los demás (Súper rápido)
+  sendCommand: (command, data = {}) => {
+    const { connectChannel, deviceId, activeDeviceId } = get();
     if (!connectChannel || (activeDeviceId && activeDeviceId !== deviceId)) return;
 
     connectChannel.send({
       type: 'broadcast',
-      event: 'sync_state',
+      event: 'player_command',
       payload: {
-        deviceId,
-        state: {
-          songId: currentSong?.id,
-          isPlaying,
-          currentTime,
-          activeDeviceId: activeDeviceId || deviceId
-        }
+        senderId: deviceId,
+        command,
+        data: { ...data, activeDeviceId: activeDeviceId || deviceId }
       }
     });
+  },
 
-    // Actualizamos la DB como respaldo cada cierto tiempo (opcionalmente aquí)
+  broadcastState: () => {
+    const { currentSong, isPlaying, currentTime } = get();
+    get().sendCommand('SYNC_ALL', {
+      songId: currentSong?.id,
+      isPlaying,
+      currentTime
+    });
   },
 
   // 1.1 Recuperar estado inicial de la nube
@@ -94,21 +97,33 @@ export const usePlayerStore = create((set, get) => ({
         const devices = Object.values(newState).flat();
         set({ onlineDevices: devices });
       })
-      .on('broadcast', { event: 'sync_state' }, ({ payload }) => {
-        const { deviceId: senderId, state } = payload;
+      // B. Escuchar órdenes de otros dispositivos (Protocolo de Comandos Pro)
+      .on('broadcast', { event: 'player_command' }, ({ payload }) => {
+        const { command, data, senderId } = payload;
         const myId = get().deviceId;
 
         if (senderId !== myId) {
-          const { queue, currentSong } = get();
-          if (state.songId && state.songId !== currentSong?.id) {
-            const newSong = queue.find(s => s.id === state.songId);
-            if (newSong) set({ currentSong: newSong });
+          console.log(`[Musicfy Connect] Comando recibido: ${command}`, data);
+          
+          switch (command) {
+            case 'PLAY_SONG':
+              const song = get().queue.find(s => s.id === data.songId);
+              if (song) set({ currentSong: song, isPlaying: true, activeDeviceId: data.activeDeviceId });
+              break;
+            case 'TOGGLE_PLAY':
+              set({ isPlaying: data.isPlaying, activeDeviceId: data.activeDeviceId });
+              break;
+            case 'SEEK':
+              set({ currentTime: data.time });
+              break;
+            case 'SYNC_ALL':
+              set({ 
+                isPlaying: data.isPlaying,
+                currentTime: data.currentTime,
+                activeDeviceId: data.activeDeviceId
+              });
+              break;
           }
-          set({ 
-            isPlaying: state.isPlaying,
-            currentTime: state.currentTime,
-            activeDeviceId: state.activeDeviceId
-          });
         }
       })
       .subscribe(async (status) => {
@@ -172,22 +187,22 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: (song) => {
-    set({ currentSong: song, isPlaying: true, activeDeviceId: get().deviceId });
+    set({ currentSong: song, isPlaying: true });
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().broadcastState();
+    get().sendCommand('PLAY_SONG', { songId: song.id });
   },
 
   togglePlay: () => {
     const newState = !get().isPlaying;
-    set({ isPlaying: newState, activeDeviceId: get().deviceId });
-    get().broadcastState();
+    set({ isPlaying: newState });
+    get().sendCommand('TOGGLE_PLAY', { isPlaying: newState });
   },
 
   setVolume: (volume) => set({ volume }),
   
   setCurrentTime: (time, fromUI = false) => {
     set({ currentTime: time });
-    if (fromUI) get().broadcastState();
+    if (fromUI) get().sendCommand('SEEK', { time });
   },
 
   setDuration: (duration) => set({ duration }),
@@ -221,28 +236,28 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     if (nextSong) {
-      set({ currentSong: nextSong, isPlaying: true, activeDeviceId: deviceId });
+      set({ currentSong: nextSong, isPlaying: true });
       if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
-      get().broadcastState();
+      get().sendCommand('SYNC_ALL', { songId: nextSong.id, isPlaying: true, currentTime: 0 });
     }
   },
 
   playPrevious: () => {
-    const { currentSong, queue, currentTime, deviceId } = get();
+    const { currentSong, queue, currentTime } = get();
     if (!currentSong || queue.length === 0) return;
 
     if (currentTime > 3) {
       set({ currentTime: 0 });
-      get().broadcastState();
+      get().sendCommand('SEEK', { time: 0 });
       return;
     }
 
     const currentIndex = queue.findIndex(s => s.id === currentSong.id);
     if (currentIndex > 0) {
       const prevS = queue[currentIndex - 1];
-      set({ currentSong: prevS, isPlaying: true, activeDeviceId: deviceId });
+      set({ currentSong: prevS, isPlaying: true });
       if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
-      get().broadcastState();
+      get().sendCommand('SYNC_ALL', { songId: prevS.id, isPlaying: true, currentTime: 0 });
     }
   }
 }));
