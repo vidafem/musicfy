@@ -21,7 +21,8 @@ export default function SettingsSidebar({ isOpen, onClose }) {
   const setAccentOpacity = useSettingsStore(state => state.setAccentOpacity);
   const clearCache = useSettingsStore(state => state.clearCache);
   
-  const { signOut, user } = useAuthStore();
+  const signOut = useAuthStore(state => state.signOut);
+  const user = useAuthStore(state => state.user);
 
   return (
     <>

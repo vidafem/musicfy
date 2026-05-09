@@ -9,7 +9,8 @@ import UserManager from '../pages/admin/UserManager';
 import './AdminLayout.css';
 
 export default function AdminLayout() {
-  const { signOut, user } = useAuthStore();
+  const signOut = useAuthStore(state => state.signOut);
+  const user = useAuthStore(state => state.user);
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
@@ -66,7 +67,10 @@ export default function AdminLayout() {
               <span className="email">{user?.email?.split('@')[0] || 'admin'}</span>
             </div>
           )}
-          <button className="admin-logout-btn" onClick={signOut} title="Cerrar Sesión">
+          <button className="admin-logout-btn" onClick={() => {
+            console.log("Cerrando sesión...");
+            signOut();
+          }} title="Cerrar Sesión">
             <LogOut size={20} />
           </button>
         </div>

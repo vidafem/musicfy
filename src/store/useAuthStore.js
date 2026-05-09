@@ -51,7 +51,13 @@ export const useAuthStore = create((set) => ({
   },
   
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, session: null, isAdmin: false });
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Error al cerrar sesión en servidor:", error);
+    } finally {
+      // Siempre limpiamos el estado local para forzar la salida
+      set({ user: null, session: null, isAdmin: false });
+    }
   }
 }));

@@ -52,6 +52,7 @@ export default function PlayerBar() {
   const [uiTransition, setUiTransition] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [localCurrentTime, setLocalCurrentTime] = useState(0); // Tiempo local rápido para UI
+  const [showTransferPrompt, setShowTransferPrompt] = useState(false);
   
   const audioARef = useRef(null);
   const audioBRef = useRef(null);
@@ -236,6 +237,23 @@ export default function PlayerBar() {
     }, 10000);
     return () => clearInterval(interval);
   }, [isPlaying, activeDeviceId, deviceId]);
+
+  // SINCRONIZACIÓN DE AUDIO PARA MODO ESPEJO (Asegura letras y progreso)
+  useEffect(() => {
+    const mainAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
+    if (activeDeviceId && activeDeviceId !== deviceId && mainAudio) {
+      // Si el tiempo real de la nube se aleja más de 1 segundo, corregimos
+      if (Math.abs(mainAudio.currentTime - currentTime) > 1) {
+        mainAudio.currentTime = currentTime;
+      }
+      // Aseguramos que el audio esté "reproduciéndose" (aunque esté silenciado) para mover la UI
+      if (isPlaying && mainAudio.paused) {
+        mainAudio.play().catch(() => {});
+      } else if (!isPlaying && !mainAudio.paused) {
+        mainAudio.pause();
+      }
+    }
+  }, [currentTime, isPlaying, activeDeviceId, deviceId, activeChannel]);
 
   // Lógica de inactividad (Idle) para el modo TV
   useEffect(() => {

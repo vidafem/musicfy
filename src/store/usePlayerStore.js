@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { supabase } from '../supabaseClient';
 
-// Generamos o recuperamos un ID de dispositivo único
+// Generamos o recuperamos un ID de dispositivo único (sessionStorage para separar pestañas)
 const getDeviceId = () => {
-  let id = localStorage.getItem('musicfy_device_id');
+  let id = sessionStorage.getItem('musicfy_device_id');
   if (!id) {
     id = `dev_${crypto.randomUUID().slice(0, 8)}`;
-    localStorage.setItem('musicfy_device_id', id);
+    sessionStorage.setItem('musicfy_device_id', id);
   }
   return id;
 };
@@ -32,24 +32,64 @@ export const usePlayerStore = create((set, get) => ({
     const { currentSong, isPlaying, currentTime, deviceId, activeDeviceId } = get();
     const { data: { user } } = await supabase.auth.getUser();
     
+    // Si no soy el dispositivo activo y no es un forceUpdate, no subo nada
     if (!user || (!forceUpdate && activeDeviceId && activeDeviceId !== deviceId)) return;
 
-    await supabase
+    const updateData = {
+      is_playing: isPlaying,
+      current_playback_time: currentTime,
+      active_device_id: activeDeviceId || deviceId,
+      sync_source_device: deviceId,
+      last_seen: new Date().toISOString()
+    };
+
+    if (currentSong?.id) {
+      updateData.last_played_id = currentSong.id;
+    }
+
+    const { error } = await supabase
       .from('profiles')
-      .update({
-        last_played_id: currentSong?.id,
-        is_playing: isPlaying,
-        current_playback_time: currentTime,
-        active_device_id: activeDeviceId || deviceId,
-        sync_source_device: deviceId,
-        last_seen: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', user.id);
+
+    if (error) console.error("Error en sincronización Connect:", error);
+  },
+
+  // 1.1 Recuperar estado inicial de la nube
+  fetchRemoteState: async (userId) => {
+    // Esperar un momento a que la cola se cargue si está vacía
+    if (get().queue.length === 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('last_played_id, is_playing, current_playback_time, active_device_id')
+      .eq('id', userId)
+      .single();
+
+    if (!error && data && data.last_played_id) {
+      console.log("Estado remoto recuperado:", data);
+      const { queue } = get();
+      const remoteSong = queue.find(s => s.id === data.last_played_id);
+      
+      if (remoteSong) {
+        set({ 
+          currentSong: remoteSong, 
+          isPlaying: data.is_playing, 
+          currentTime: data.current_playback_time,
+          activeDeviceId: data.active_device_id
+        });
+      }
+    }
   },
 
   // 2. Suscribirse a cambios de otros dispositivos
   subscribeToRemoteControl: (userId) => {
     if (!userId) return;
+
+    // Al iniciar, pedimos el estado actual de la nube
+    get().fetchRemoteState(userId);
 
     const channel = supabase
       .channel(`profile_sync_${userId}`)
@@ -59,6 +99,7 @@ export const usePlayerStore = create((set, get) => ({
         table: 'profiles', 
         filter: `id=eq.${userId}` 
       }, (payload) => {
+        console.log("Cambio detectado en otro dispositivo:", payload.new);
         const data = payload.new;
         const myDeviceId = get().deviceId;
 
@@ -71,6 +112,8 @@ export const usePlayerStore = create((set, get) => ({
             const newSong = queue.find(s => s.id === data.last_played_id);
             if (newSong) {
               set({ currentSong: newSong, isPlaying: data.is_playing, activeDeviceId: data.active_device_id });
+              // ¡IMPORTANTE!: Cargar letras y fondo de la nueva canción sincronizada
+              get().fetchSongDetails(newSong.id);
             }
           } else {
             // Si solo cambió el estado de play/pausa o progreso
