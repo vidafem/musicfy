@@ -20,15 +20,10 @@ export const usePlayerStore = create((set, get) => ({
   volume: 1,
   currentTime: 0,
   duration: 0,
-  isMixing: false, // Estado para el fundido cruzado sincronizado
 
   // Shuffle y Repeat
   isShuffled: false,
   repeatMode: 'none', // 'none' | 'one' | 'all'
-  
-  // Connect State
-  showDeviceModal: false,
-  realtimeChannel: null, // Canal persistente
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT) ---
   
@@ -36,45 +31,33 @@ export const usePlayerStore = create((set, get) => ({
   syncToCloud: async (forceUpdate = false) => {
     const { currentSong, isPlaying, currentTime, deviceId, activeDeviceId } = get();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
     
-    // REGLA DE ORO: El espejo solo sube cambios si es una acción MANUAL (forceUpdate)
-    // El resto del tiempo (progreso automático), solo el MASTER sube a la nube.
-    const isMaster = activeDeviceId === deviceId;
-    if (!forceUpdate && !isMaster) return;
+    // Si no soy el dispositivo activo y no es un forceUpdate, no subo nada
+    if (!user || (!forceUpdate && activeDeviceId && activeDeviceId !== deviceId)) return;
 
     const updateData = {
       is_playing: isPlaying,
       current_playback_time: currentTime,
-      active_device_id: activeDeviceId,
+      active_device_id: activeDeviceId || deviceId,
       sync_source_device: deviceId,
-      last_seen: new Date().toISOString(),
-      sync_timestamp: Date.now() // Evitar pisar con datos viejos
+      last_seen: new Date().toISOString()
     };
 
-    if (currentSong?.id) updateData.last_played_id = currentSong.id;
-
-    await supabase.from('profiles').update(updateData).eq('id', user.id);
-  },
-
-  // 1.2 Broadcast rápido (Milisegundos)
-  broadcastStatus: (payload) => {
-    const channel = get().realtimeChannel;
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'sync_fast',
-        payload: { 
-          ...payload, 
-          source: get().deviceId,
-          timestamp: Date.now() 
-        }
-      });
+    if (currentSong?.id) {
+      updateData.last_played_id = currentSong.id;
     }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', user.id);
+
+    if (error) console.error("Error en sincronización Connect:", error);
   },
 
   // 1.1 Recuperar estado inicial de la nube
   fetchRemoteState: async (userId) => {
+    // Esperar un momento a que la cola se cargue si está vacía
     if (get().queue.length === 0) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -86,6 +69,7 @@ export const usePlayerStore = create((set, get) => ({
       .single();
 
     if (!error && data && data.last_played_id) {
+      console.log("Estado remoto recuperado:", data);
       const { queue } = get();
       const remoteSong = queue.find(s => s.id === data.last_played_id);
       
@@ -100,69 +84,54 @@ export const usePlayerStore = create((set, get) => ({
     }
   },
 
-  // 2. Suscribirse a cambios
+  // 2. Suscribirse a cambios de otros dispositivos
   subscribeToRemoteControl: (userId) => {
     if (!userId) return;
+
+    // Al iniciar, pedimos el estado actual de la nube
     get().fetchRemoteState(userId);
 
-    const channel = supabase.channel(`profile_sync_${userId}`, {
-      config: { broadcast: { self: false } }
-    });
-    
-    let lastProcessedTimestamp = 0;
-
-    channel
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => {
+    const channel = supabase
+      .channel(`profile_sync_${userId}`)
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'profiles', 
+        filter: `id=eq.${userId}` 
+      }, (payload) => {
+        console.log("Cambio detectado en otro dispositivo:", payload.new);
         const data = payload.new;
-        if (data.sync_source_device === get().deviceId) return;
-        
-        // Evitar procesar datos viejos
-        if (data.sync_timestamp && data.sync_timestamp < lastProcessedTimestamp) return;
-        lastProcessedTimestamp = data.sync_timestamp || Date.now();
+        const myDeviceId = get().deviceId;
 
-        const { queue, currentSong } = get();
-        if (data.last_played_id && data.last_played_id !== currentSong?.id) {
-          const newSong = queue.find(s => s.id === data.last_played_id);
-          if (newSong) {
-            set({ currentSong: newSong, isPlaying: data.is_playing, activeDeviceId: data.active_device_id });
-            get().fetchSongDetails(newSong.id);
-          }
-        } else {
-          set({ isPlaying: data.is_playing, activeDeviceId: data.active_device_id });
-        }
-      })
-      .on('broadcast', { event: 'sync_fast' }, ({ payload }) => {
-        if (payload.source === get().deviceId) return;
-        
-        if (payload.currentTime !== undefined) {
-          const diff = Math.abs(get().currentTime - payload.currentTime);
-          if (diff > 0.3) { // Margen mínimo
-            set({ currentTime: payload.currentTime });
+        // Si el cambio viene de OTRO dispositivo, nos sincronizamos
+        if (data.sync_source_device !== myDeviceId) {
+          const { queue, currentSong } = get();
+          
+          // Si cambió la canción
+          if (data.last_played_id && data.last_played_id !== currentSong?.id) {
+            const newSong = queue.find(s => s.id === data.last_played_id);
+            if (newSong) {
+              set({ currentSong: newSong, isPlaying: data.is_playing, activeDeviceId: data.active_device_id });
+            }
+          } else {
+            // Si solo cambió el estado de play/pausa o progreso
+            set({ 
+              isPlaying: data.is_playing, 
+              currentTime: data.current_playback_time,
+              activeDeviceId: data.active_device_id
+            });
           }
         }
-        if (payload.isPlaying !== undefined) set({ isPlaying: payload.isPlaying });
-        if (payload.activeDeviceId !== undefined) set({ activeDeviceId: payload.activeDeviceId });
-        if (payload.isMixing !== undefined) {
-          // Si el maestro está mezclando, activamos el estado local para que la UI reaccione
-          set({ isMixing: payload.isMixing });
-        }
       })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') set({ realtimeChannel: channel });
-      });
+      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-      set({ realtimeChannel: null });
-    };
+    return () => supabase.removeChannel(channel);
   },
 
-  toggleDeviceModal: (val) => set({ showDeviceModal: val !== undefined ? val : !get().showDeviceModal }),
-  
+  // Reclamar el audio para este dispositivo
   transferPlayback: () => {
-    set({ activeDeviceId: get().deviceId, showDeviceModal: false });
+    set({ activeDeviceId: get().deviceId });
     get().syncToCloud(true);
-    get().broadcastStatus({ activeDeviceId: get().deviceId });
   },
 
   fetchSongs: async () => {
@@ -206,8 +175,10 @@ export const usePlayerStore = create((set, get) => ({
 
   setVolume: (volume) => set({ volume }),
   
-  setCurrentTime: (time) => {
+  setCurrentTime: (time, fromUI = false) => {
     set({ currentTime: time });
+    // Solo sincronizamos al hacer seek manual para no saturar la red
+    if (fromUI) get().syncToCloud();
   },
 
   setDuration: (duration) => set({ duration }),
@@ -220,55 +191,49 @@ export const usePlayerStore = create((set, get) => ({
     return { repeatMode: next[state.repeatMode] };
   }),
 
-  playSong: async (song) => {
-    // Mantenemos el activeDeviceId actual para no robar el audio si somos espejo
-    set({ currentSong: song, isPlaying: true, currentTime: 0 });
-    get().syncToCloud(true);
-    get().fetchSongDetails(song.id);
-  },
-
-  togglePlay: () => {
-    const { isPlaying } = get();
-    set({ isPlaying: !isPlaying });
-    get().syncToCloud(true);
-    get().broadcastStatus({ isPlaying: !isPlaying });
-  },
-
   playNext: () => {
-    const { queue, currentSong, isShuffled } = get();
-    if (queue.length === 0) return;
-    
+    const { currentSong, queue, isShuffled, repeatMode, deviceId } = get();
+    if (!currentSong || queue.length === 0) return;
+
+    const currentIndex = queue.findIndex(s => s.id === currentSong.id);
     let nextSong;
-    const currentIndex = queue.findIndex(s => s.id === currentSong?.id);
-    
-    if (isShuffled) {
-      const randomIndex = Math.floor(Math.random() * queue.length);
+
+    if (repeatMode === 'one') {
+      nextSong = { ...currentSong };
+    } else if (isShuffled) {
+      let randomIndex;
+      do { randomIndex = Math.floor(Math.random() * queue.length); } 
+      while (randomIndex === currentIndex && queue.length > 1);
       nextSong = queue[randomIndex];
-    } else {
-      nextSong = queue[(currentIndex + 1) % queue.length];
+    } else if (currentIndex < queue.length - 1) {
+      nextSong = queue[currentIndex + 1];
+    } else if (repeatMode === 'all') {
+      nextSong = queue[0];
     }
-    
-    set({ currentSong: nextSong, isPlaying: true, currentTime: 0 });
-    get().syncToCloud(true);
-    get().fetchSongDetails(nextSong.id);
+
+    if (nextSong) {
+      set({ currentSong: nextSong, isPlaying: true, activeDeviceId: deviceId });
+      if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
+      get().syncToCloud();
+    }
   },
 
   playPrevious: () => {
-    const { queue, currentSong, currentTime } = get();
-    if (queue.length === 0) return;
-    
+    const { currentSong, queue, currentTime, deviceId } = get();
+    if (!currentSong || queue.length === 0) return;
+
     if (currentTime > 3) {
       set({ currentTime: 0 });
-      get().syncToCloud(true);
+      get().syncToCloud();
       return;
     }
 
-    const currentIndex = queue.findIndex(s => s.id === currentSong?.id);
-    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
-    const prevSong = queue[prevIndex];
-    
-    set({ currentSong: prevSong, isPlaying: true, currentTime: 0 });
-    get().syncToCloud(true);
-    get().fetchSongDetails(prevSong.id);
+    const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+    if (currentIndex > 0) {
+      const prevS = queue[currentIndex - 1];
+      set({ currentSong: prevS, isPlaying: true, activeDeviceId: deviceId });
+      if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
+      get().syncToCloud();
+    }
   }
 }));
