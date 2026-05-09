@@ -426,7 +426,10 @@ export default function PlayerBar() {
       {/* ==================================
           MINI PÍLDORA PREVIA (Modo Desktop) 
           ================================== */}
-      <div className={`mini-player-pill-container ${isFullScreen ? 'hidden' : ''}`} onClick={() => setIsFullScreen(true)}>
+      <div 
+        className={`mini-player-pill-container ${(!isPlaying || isFullScreen) ? 'hidden' : ''}`} 
+        onClick={() => setIsFullScreen(true)}
+      >
         <GlassButtonWrapper 
           radius="25" 
           depth="10" 
