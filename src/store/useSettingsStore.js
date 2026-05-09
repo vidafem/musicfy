@@ -11,6 +11,7 @@ export const useSettingsStore = create(
       crossfadeEnabled: false,
       crossfadeTime: 10,
       equalizerEnabled: false,
+      eqGains: [0, 0, 0, 0, 0], // Niveles del EQ por defecto
       likedSongs: [], // Array de IDs de canciones marcadas con ❤️
       accentColor: '#00ffff', // Color de neón por defecto
       accentOpacity: 1,      // Opacidad del sistema
@@ -30,6 +31,10 @@ export const useSettingsStore = create(
       },
       toggleEqualizer: () => {
         set((state) => ({ equalizerEnabled: !state.equalizerEnabled }));
+        get().saveSettingsToCloud();
+      },
+      setEqGains: (gains) => {
+        set({ eqGains: gains });
         get().saveSettingsToCloud();
       },
       setAccentColor: (color) => {
@@ -57,7 +62,9 @@ export const useSettingsStore = create(
           accentOpacity: get().accentOpacity,
           animatedCovers: get().animatedCovers,
           crossfadeEnabled: get().crossfadeEnabled,
-          crossfadeTime: get().crossfadeTime
+          crossfadeTime: get().crossfadeTime,
+          equalizerEnabled: get().equalizerEnabled,
+          eqGains: get().eqGains
         };
 
         await supabase

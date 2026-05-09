@@ -29,10 +29,10 @@ export const usePlayerStore = create((set, get) => ({
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT PRO) ---
   
-  // 1. Enviar comandos instantáneos
+  // 1. Enviar comandos instantáneos (Cualquier dispositivo puede mandar órdenes)
   sendCommand: (command, data = {}) => {
     const { connectChannel, deviceId, activeDeviceId } = get();
-    if (!connectChannel || (activeDeviceId && activeDeviceId !== deviceId)) return;
+    if (!connectChannel) return;
 
     connectChannel.send({
       type: 'broadcast',
@@ -58,6 +58,8 @@ export const usePlayerStore = create((set, get) => ({
   // 3. Recuperar estado desde la NUBE (Base de datos)
   fetchRemoteState: async (userId) => {
     if (!userId) return;
+    console.log("[Connect] Recuperando ajustes de la nube para el usuario:", userId);
+    
     const { data, error } = await supabase
       .from('profiles')
       .select('last_played_id, is_playing, current_playback_time, active_device_id, settings')
@@ -65,13 +67,14 @@ export const usePlayerStore = create((set, get) => ({
       .single();
 
     if (!error && data) {
-      // Sincronizar Ajustes Visuales
+      // Sincronizar Ajustes Visuales (Prioridad Nube)
       if (data.settings) {
+        console.log("[Connect] Aplicando ajustes remotos:", data.settings);
         const { useSettingsStore } = await import('./useSettingsStore');
         useSettingsStore.getState().applyRemoteSettings(data.settings);
       }
 
-      // Sincronizar Música (Buscamos la canción real por ID)
+      // Sincronizar Música
       if (data.last_played_id) {
         const { data: songData } = await supabase.from('songs').select('*').eq('id', data.last_played_id).single();
         if (songData) {
@@ -83,6 +86,8 @@ export const usePlayerStore = create((set, get) => ({
           });
         }
       }
+    } else if (error) {
+      console.error("[Connect] Error al recuperar estado remoto:", error);
     }
   },
 
@@ -228,7 +233,7 @@ export const usePlayerStore = create((set, get) => ({
     if (nextSong) {
       set({ currentSong: nextSong, isPlaying: true });
       if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
-      get().sendCommand('SYNC_ALL', { songId: nextSong.id, isPlaying: true, currentTime: 0 });
+      get().sendCommand('PLAY_SONG', { song: nextSong });
     }
   },
 
@@ -247,7 +252,7 @@ export const usePlayerStore = create((set, get) => ({
       const prevS = queue[currentIndex - 1];
       set({ currentSong: prevS, isPlaying: true });
       if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
-      get().sendCommand('SYNC_ALL', { songId: prevS.id, isPlaying: true, currentTime: 0 });
+      get().sendCommand('PLAY_SONG', { song: prevS });
     }
   }
 }));

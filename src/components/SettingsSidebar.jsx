@@ -11,9 +11,10 @@ export default function SettingsSidebar({ isOpen, onClose }) {
     animatedCovers, toggleAnimatedCovers, 
     crossfadeEnabled, toggleCrossfade,
     crossfadeTime, setCrossfadeTime,
-    equalizerEnabled, toggleEqualizer,
     accentColor, setAccentColor,
     accentOpacity, setAccentOpacity,
+    equalizerEnabled, toggleEqualizer,
+    eqGains, setEqGains,
     saveSettingsToCloud,
     clearCache 
   } = useSettingsStore();
@@ -23,9 +24,15 @@ export default function SettingsSidebar({ isOpen, onClose }) {
     // Forzamos un broadcast de los ajustes a otros dispositivos
     const { usePlayerStore } = await import('../store/usePlayerStore');
     usePlayerStore.getState().sendCommand('SYNC_SETTINGS', {
-      accentColor, accentOpacity, animatedCovers, crossfadeEnabled, crossfadeTime
+      accentColor, accentOpacity, animatedCovers, crossfadeEnabled, crossfadeTime, equalizerEnabled, eqGains
     });
-    alert('¡Perfil Sincronizado en todos tus dispositivos! 🚀');
+    alert('¡Perfil Sincronizado! Configuración y Ecualizador guardados. 🚀');
+  };
+
+  const handleEqChange = (index, value) => {
+    const newGains = [...eqGains];
+    newGains[index] = parseFloat(value);
+    setEqGains(newGains);
   };
   
   const signOut = useAuthStore(state => state.signOut);
@@ -59,7 +66,63 @@ export default function SettingsSidebar({ isOpen, onClose }) {
           </div>
           
           <div className="settings-section">
-            <h3>Reproducción</h3>
+          <h3>Ecualizador Pro</h3>
+          <div className="setting-item">
+            <div className="setting-info">
+              <span>Activar Ecualización</span>
+              <p>Mejora la calidad de audio con ajustes personalizados.</p>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={equalizerEnabled} onChange={toggleEqualizer} />
+              <span className="slider round"></span>
+            </label>
+          </div>
+          
+          {equalizerEnabled && (
+            <div className="eq-container" style={{ marginTop: '20px', padding: '0 10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', height: '120px', alignItems: 'flex-end', gap: '10px' }}>
+                {['60Hz', '230Hz', '910Hz', '4kHz', '14kHz'].map((label, i) => (
+                  <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '10px' }}>
+                    <div className="eq-bar-wrapper" style={{ height: '100px', width: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', position: 'relative' }}>
+                       <input 
+                         type="range" 
+                         min="-12" 
+                         max="12" 
+                         step="0.5"
+                         value={eqGains[i]}
+                         onChange={(e) => handleEqChange(i, e.target.value)}
+                         style={{
+                           position: 'absolute',
+                           top: '50%',
+                           left: '50%',
+                           transform: 'translate(-50%, -50%) rotate(-90deg)',
+                           width: '100px',
+                           height: '6px',
+                           cursor: 'pointer',
+                           appearance: 'none',
+                           background: 'none'
+                         }}
+                       />
+                       <div className="eq-fill" style={{
+                         position: 'absolute',
+                         bottom: 0,
+                         width: '100%',
+                         height: `${((eqGains[i] + 12) / 24) * 100}%`,
+                         background: 'var(--accent-color)',
+                         borderRadius: '10px',
+                         boxShadow: '0 0 10px var(--accent-glow)'
+                       }}></div>
+                    </div>
+                    <span style={{ fontSize: '9px', opacity: 0.5 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <h3>Colores y Neón</h3>
             
             <div className="setting-item">
               <div className="setting-info">
