@@ -20,6 +20,7 @@ export const usePlayerStore = create((set, get) => ({
   volume: 1,
   currentTime: 0,
   duration: 0,
+  playbackHistory: [], // Historial real de lo que ha sonado
 
   onlineDevices: [],
   connectChannel: null,
@@ -153,11 +154,13 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   fetchSongs: async () => {
-    // OPTIMIZACIÓN: Solo traemos datos ligeros para la cola inicial
+    // OPTIMIZACIÓN: Solo traemos las últimas 50 para no saturar memoria
     const { data, error } = await supabase
       .from('songs')
       .select('id, title, artist, cover_url, url, created_at')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
     if (!error && data.length > 0) {
       set({ queue: data, currentSong: get().currentSong || data[0] });
     }
@@ -182,6 +185,13 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: (song) => {
+    const { currentSong, playbackHistory } = get();
+    
+    // Si ya hay una canción sonando, la guardamos en el historial antes de cambiar
+    if (currentSong && currentSong.id !== song.id) {
+      set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) }); // Guardamos las últimas 50
+    }
+
     set({ currentSong: song, isPlaying: true });
     if (!song.lyrics) get().fetchSongDetails(song.id);
     get().sendCommand('PLAY_SONG', { songId: song.id });
@@ -232,12 +242,15 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playNext: () => {
+    const { currentSong, queue, playbackHistory } = get();
     const { useSettingsStore } = require('./useSettingsStore');
     const { repeatMode } = useSettingsStore.getState();
-    const { currentSong, queue } = get();
+    
     if (!currentSong || queue.length === 0) return;
 
-    // Con la cola físicamente mezclada, solo seguimos el índice
+    // Guardar en historial antes de avanzar
+    set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) });
+
     const currentIndex = queue.findIndex(s => s.id === currentSong.id);
     let nextSong;
 
@@ -257,21 +270,34 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playPrevious: () => {
-    const { currentSong, queue, currentTime } = get();
-    if (!currentSong || queue.length === 0) return;
-
+    const { currentSong, playbackHistory, currentTime } = get();
+    
+    // 1. Si la canción lleva más de 3 segundos, solo reiniciamos el tiempo
     if (currentTime > 3) {
       set({ currentTime: 0 });
       get().sendCommand('SEEK', { time: 0 });
+      console.log("[Player] ⏮️ Reiniciando canción actual.");
       return;
     }
 
-    const currentIndex = queue.findIndex(s => s.id === currentSong.id);
-    if (currentIndex > 0) {
-      const prevS = queue[currentIndex - 1];
-      set({ currentSong: prevS, isPlaying: true });
-      if (!prevS.lyrics) get().fetchSongDetails(prevS.id);
-      get().sendCommand('PLAY_SONG', { song: prevS });
+    // 2. Si estamos al principio, intentamos ir a la canción REAL anterior del historial
+    if (playbackHistory.length > 0) {
+      const newHistory = [...playbackHistory];
+      const prevSong = newHistory.pop();
+      
+      set({ 
+        currentSong: prevSong, 
+        isPlaying: true, 
+        playbackHistory: newHistory 
+      });
+      
+      if (!prevSong.lyrics) get().fetchSongDetails(prevSong.id);
+      get().sendCommand('PLAY_SONG', { song: prevSong });
+      console.log("[Player] ⏪ Retrocediendo a:", prevSong.title);
+    } else {
+      // Si no hay historial, solo reiniciamos
+      set({ currentTime: 0 });
+      get().sendCommand('SEEK', { time: 0 });
     }
   }
 }));
