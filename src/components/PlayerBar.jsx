@@ -70,7 +70,7 @@ export default function PlayerBar() {
     setIsMixing(val);
   };
 
-  // Lógica de MIXER PROFESIONAL (Doble Canal Físico)
+  // --- LÓGICA DE MIXER RESTAURADA (TU JOYA) ---
   useEffect(() => {
     const mainAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
     if (mainAudio && isPlaying && crossfadeEnabled) {
@@ -94,17 +94,16 @@ export default function PlayerBar() {
           }
         }
 
+        // Curva de volumen suavizada (Exponencial para suavidad extrema)
         const fadeRatio = timeLeft / crossfadeTime;
-        mainAudio.volume = fadeRatio * volume;
+        mainAudio.volume = Math.pow(fadeRatio, 2) * volume;
         if (secAudio) {
-          secAudio.volume = (0.2 + (1 - fadeRatio) * 0.8) * volume;
+          secAudio.volume = Math.pow(1 - fadeRatio, 2) * volume;
         }
 
-        if (fadeRatio <= 0.4) setUiTransition(true);
+        if (fadeRatio <= 0.5 && !uiTransition) setUiTransition(true);
 
-        // FINALIZACIÓN: Solo rotamos el canal y avanzamos la canción.
-        // EL ESPEJO NO AVANZA SOLO, ESPERA LA ORDEN DEL MAESTRO
-        if (timeLeft <= 0.2) {
+        if (timeLeft <= 0.3) {
            if (activeDeviceId === deviceId) {
              const savedTime = secAudio.currentTime;
              const savedDuration = secAudio.duration;
@@ -117,14 +116,14 @@ export default function PlayerBar() {
            }
         }
       } else {
+        mainAudio.volume = volume;
         if (isMixing) {
           setIsMixing(false);
           broadcastStatus({ isMixing: false });
         }
-        mainAudio.volume = volume;
       }
     }
-  }, [currentTime, duration, isPlaying, volume, crossfadeEnabled, crossfadeTime, queue, currentSong, activeChannel]);
+  }, [currentTime, duration, isPlaying, crossfadeEnabled, crossfadeTime, activeChannel, volume, nextSongInfo, isMixing, uiTransition]);
 
   // Resetear el estado visual del Mixer SOLO cuando currentSong realmente cambia en el store
   // Esto evita el "flash" de la canción vieja por un frame
@@ -655,36 +654,38 @@ export default function PlayerBar() {
         </div>
 
         {/* ==================================
-            MODAL DE SELECCIÓN DE DISPOSITIVO (CONNECT)
+            MODAL DE SELECCIÓN DE DISPOSITIVO (MUSICFY CONNECT)
             ================================== */}
         {showDeviceModal && (
           <div className="device-modal-overlay" onClick={() => toggleDeviceModal(false)}>
-            <div className="device-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="device-modal-content glass" onClick={e => e.stopPropagation()}>
               <div className="device-modal-header">
-                <h3>Escuchar en un dispositivo</h3>
-                <button onClick={() => toggleDeviceModal(false)}><X size={20}/></button>
+                <h3>Musicfy Connect</h3>
+                <p>¿En qué dispositivo quieres que suene la música?</p>
               </div>
+              
               <div className="device-list">
-                <div className={`device-item ${activeDeviceId === deviceId ? 'current' : ''}`} onClick={transferPlayback}>
+                <div className={`device-item ${activeDeviceId === deviceId ? 'current' : ''}`} onClick={() => transferPlayback(deviceId)}>
                   <div className="device-icon">
                     {window.innerWidth < 768 ? <Smartphone size={24}/> : <Monitor size={24}/>}
                   </div>
                   <div className="device-info">
                     <h4>Este dispositivo</h4>
-                    <p>{activeDeviceId === deviceId ? 'Sonando ahora' : 'Haz clic para reproducir aquí'}</p>
+                    <p>{activeDeviceId === deviceId ? 'Reproduciendo ahora' : 'Toca para transferir el audio'}</p>
                   </div>
                   {activeDeviceId === deviceId && <div className="active-dot"></div>}
                 </div>
                 
-                {/* OTROS DISPOSITIVOS (MOCK - En producción se detectan por Presence) */}
-                <div className="device-item disabled">
+                {/* Otros dispositivos (Simulación SharePlay) */}
+                <div className="device-item" onClick={() => alert("Función de red local en desarrollo...")}>
                   <div className="device-icon"><Tv size={24}/></div>
                   <div className="device-info">
-                    <h4>Musicfy TV / Otros</h4>
-                    <p>Detectando dispositivos en red...</p>
+                    <h4>Smart TV / Otros</h4>
+                    <p>Disponible para controlar</p>
                   </div>
                 </div>
               </div>
+              <button className="close-modal-btn" onClick={() => toggleDeviceModal(false)}>Listo</button>
             </div>
           </div>
         )}
