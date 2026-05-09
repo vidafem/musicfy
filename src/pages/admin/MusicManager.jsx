@@ -6,7 +6,30 @@ import { uploadToR2, deleteFromR2 } from '../../lib/cloudflareR2';
 import { supabase } from '../../supabaseClient';
 import './Admin.css';
 
-export default function MusicManager() {
+const suggestionBtnStyle = {
+  background: 'rgba(0, 255, 255, 0.1)',
+  border: '1px solid var(--accent-color)',
+  color: 'var(--accent-color)',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  fontSize: '0.65rem',
+  marginLeft: '10px',
+  cursor: 'pointer',
+  fontWeight: 'bold',
+  transition: 'all 0.2s ease'
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: '12px',
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '8px',
+  color: 'white',
+  fontSize: '1rem'
+};
+
+export default function MusicManager({ onMusicAdded }) {
   const [file, setFile] = useState(null);
   const [songs, setSongs] = useState([]);
   const [metadata, setMetadata] = useState({ 
@@ -24,7 +47,6 @@ export default function MusicManager() {
     label: '',
     language: '',
     mood: '',
-    lyrics: '',
     duration: 0
   });
   const [coverUrl, setCoverUrl] = useState(null);
@@ -33,7 +55,12 @@ export default function MusicManager() {
   const [alternativeFanarts, setAlternativeFanarts] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAISearching, setIsAISearching] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [backupMetadata, setBackupMetadata] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
+
+  const spotifyStyle = { ...suggestionBtnStyle, background: 'rgba(30, 215, 96, 0.1)', borderColor: '#1ed760', color: '#1ed760' };
+  const itunesStyle = { ...suggestionBtnStyle, background: 'rgba(250, 45, 114, 0.1)', borderColor: '#fa2d72', color: '#fa2d72' };
   const [uploadedUrls, setUploadedUrls] = useState({ mp3: null, cover: null, background: null });
   const [currentSessionTimestamp] = useState(new Date().getTime());
 
@@ -68,147 +95,184 @@ export default function MusicManager() {
     fetchSongs();
   }, [fetchSongs]);
 
-  const handleDelete = async (song) => {
-    if (!window.confirm(`¿Estás seguro de borrar "${song.title}"? Esta acción eliminará los archivos de Cloudflare y los datos de Supabase permanentemente.`)) return;
-
-    try {
-      const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
-      
-      // 1. Función auxiliar para extraer Key de una URL
-      const getKey = (url) => url?.includes(publicUrl) ? url.replace(`${publicUrl}/`, '') : null;
-
-      // 2. Borrar todos los archivos de R2
-      const mp3Key = getKey(song.url);
-      const coverKey = getKey(song.cover_url);
-      const bgKey = getKey(song.background_url);
-
-      if (mp3Key) await deleteFromR2(mp3Key);
-      if (coverKey) await deleteFromR2(coverKey);
-      if (bgKey) await deleteFromR2(bgKey);
-
-      // 3. Borrar de Supabase
-      const { error } = await supabase.from('songs').delete().eq('id', song.id);
-      if (error) throw error;
-      
-      fetchSongs();
-    } catch (error) {
-      console.error("Error al eliminar completo:", error);
-      alert("Error al eliminar los archivos.");
-    }
-  };
-
-
-  const fetchAIMetadata = async (title, artist) => {
+  // FASE 1: Buscar sugerencias de metadatos (Texto)
+  const fetchAIData = async (title, artist) => {
     setIsAISearching(true);
-    setAlternativeCovers([]);
-    setAlternativeFanarts([]);
-
-    const clean = (str) => {
-      if (!str) return '';
-      return str
-        .replace(/\(Official.*?\)/gi, '')
-        .replace(/\[Official.*?\]/gi, '')
-        .replace(/- Topic/gi, '')
-        .replace(/\(Lyrics.*?\)/gi, '')
-        .replace(/ft\..*?$/gi, '')
-        .replace(/feat\..*?$/gi, '')
-        .trim();
-    };
-
-    const cleanTitle = clean(title);
-    const firstArtist = clean(artist).split(',')[0].split('y')[0].split('&')[0].trim();
-
-    let newMeta = { ...metadata };
-    let foundCovers = originalCoverBackup ? [originalCoverBackup] : [];
-    let foundFanarts = [];
-
+    setAiSuggestions(null);
     try {
-      // 1. MOTOR PRINCIPAL: ITUNES (Gratis, Sin 403, Portadas 4K)
-      try {
-        const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + ' ' + firstArtist)}&entity=song&limit=5`);
-        if (itunesRes.ok) {
-          const itData = await itunesRes.json();
-          itData.results.forEach((r, idx) => {
-            if (r.artworkUrl100) {
-              const highRes = r.artworkUrl100.replace('100x100bb', '1200x1200bb');
-              if (!foundCovers.includes(highRes)) foundCovers.push(highRes);
-            }
-            if (idx === 0) {
-               newMeta.title = r.trackName || newMeta.title;
-               newMeta.artist = r.artistName || newMeta.artist;
-               newMeta.genre = r.primaryGenreName || newMeta.genre;
-               newMeta.album = r.collectionName || newMeta.album;
-               newMeta.year = r.releaseDate?.split('-')[0] || newMeta.year;
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("Fallo en iTunes:", e);
-      }
+      const clean = (str) => str?.replace(/\[.*?\]|\(.*?\)/g, "").trim() || "";
+      const cleanTitle = clean(title);
+      const firstArtist = clean(artist).split(/[&,x\/]|\bfeat\b/i).map(a => a.trim())[0];
+      
+      let results = { itunes: null, spotify: null };
 
-      // 2. FONDOS TV: THEAUDIODB
-      const adbKey = import.meta.env.VITE_THEAUDIODB_API_KEY || '2';
+      // Sugerencia iTunes
       try {
-        const adbRes = await fetch(`https://www.theaudiodb.com/api/v1/json/${adbKey}/search.php?s=${encodeURIComponent(firstArtist)}`);
-        if (adbRes.ok) {
-          const adbData = await adbRes.json();
-          if (adbData.artists?.[0]) {
-            const art = adbData.artists[0];
-            newMeta.label = art.strLabel || newMeta.label;
-            if (art.strArtistFanart) foundFanarts.push(art.strArtistFanart);
-            if (art.strArtistFanart2) foundFanarts.push(art.strArtistFanart2);
-            if (art.strArtistWideThumb) foundFanarts.push(art.strArtistWideThumb);
-            if (foundFanarts.length > 0) newMeta.background_url = foundFanarts[0];
+        const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + " " + firstArtist)}&entity=song&limit=1`);
+        if (itRes.ok) {
+          const itData = await itRes.json();
+          const r = itData.results[0];
+          if (r) {
+            results.itunes = {
+              title: r.trackName,
+              artist: r.artistName,
+              album: r.collectionName,
+              year: r.releaseDate ? r.releaseDate.split('-')[0] : null,
+              genre: r.primaryGenreName
+            };
           }
         }
       } catch (e) {}
 
-      // 3. MOTOR EXTRA: SPOTIFY (Ahora con Premium activo)
+      // Sugerencia Spotify
       try {
         const token = await getSpotifyToken();
         if (token) {
-          const searchTitle = cleanTitle.replace(/[()]/g, '').trim();
-          const spotRes = await fetch(`${WORKER_URL}/v1/search?q=track:${encodeURIComponent(searchTitle)}%20artist:${encodeURIComponent(firstArtist)}&type=track&limit=1`, {
+          const q = `track:${cleanTitle} artist:${firstArtist}`;
+          const spotRes = await fetch(`${WORKER_URL}/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          
           if (spotRes.ok) {
             const d = await spotRes.json();
-            const spotData = d.tracks?.items[0];
-            if (spotData) {
-              // Si Spotify encuentra algo, intentamos sacar BPM y Key
-              const featRes = await fetch(`${WORKER_URL}/v1/audio-features/${spotData.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
-              if (featRes.ok) {
-                const feat = await featRes.json();
-                newMeta.bpm = Math.round(feat.tempo) || newMeta.bpm;
-                const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-                newMeta.key = feat.key !== undefined ? `${keys[feat.key]} ${feat.mode === 1 ? 'Mayor' : 'Menor'}` : newMeta.key;
-              } else if (featRes.status === 403) {
-                console.log("Spotify aún procesando tu suscripción Premium. BPM/Key disponibles en breve.");
-                newMeta.bpm = ''; // Dejar vacío para evitar error de validación
-                newMeta.key = 'Pendiente (Premium)';
-              }
+            const t = d.tracks?.items[0];
+            if (t) {
+              results.spotify = {
+                title: t.name,
+                artist: t.artists.map(a => a.name).join(', '),
+                album: t.album.name
+              };
             }
           }
         }
-      } catch (e) {
-        console.warn("Spotify falló (aunque tengas Premium):", e);
+      } catch (e) {}
+
+      setAiSuggestions(results);
+    } catch (e) {
+      console.error("Error al sugerir datos:", e);
+    } finally {
+      setIsAISearching(false);
+    }
+  };
+
+  const revertMetadata = () => {
+    if (backupMetadata) {
+      setMetadata(prev => ({
+        ...backupMetadata,
+        lyrics: prev.lyrics, // Preservamos las letras actuales
+        duration: prev.duration // Preservamos la duración física
+      }));
+      if (originalCoverBackup) setCoverUrl(originalCoverBackup);
+    }
+  };
+
+  const handleCancel = () => {
+    setFile(null);
+    setMetadata({ title: '', artist: '', album: '', lyrics: '', background_url: '', genre: '', year: '', artist_image: '' });
+    setCoverUrl(null);
+    setOriginalCoverBackup(null);
+    setAlternativeCovers([]);
+    setAlternativeFanarts([]);
+    setAiSuggestions(null);
+    setUploadStatus(null);
+  };
+
+  // FASE 2: Buscar imágenes basadas en la información ACTUAL
+  const fetchAIVisuals = async (title, artist) => {
+    setIsAISearching(true);
+    try {
+      const clean = (str) => str?.replace(/\[.*?\]|\(.*?\)/g, "").trim() || "";
+      const cleanTitle = clean(title);
+      const artistsList = artist.split(/[&,x\/]|\bfeat\b/i).map(a => a.trim()).filter(a => a);
+      const yearSuffix = metadata.year ? ` ${metadata.year}` : "";
+      
+      let foundCovers = originalCoverBackup ? [originalCoverBackup] : [];
+      let allFoundFanarts = [];
+
+      // 1. PORTADAS (iTunes + Spotify + Deezer)
+      const coverQueries = [`${cleanTitle} ${artistsList[0]}${yearSuffix}`];
+      if (metadata.album) coverQueries.push(`${metadata.album} ${artistsList[0]}`);
+
+      for (const q of coverQueries) {
+        // iTunes
+        try {
+          const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=5`);
+          if (itRes.ok) {
+            const d = await itRes.json();
+            foundCovers.push(...d.results.map(r => r.artworkUrl100.replace('100x100bb', '1200x1200bb')));
+          }
+        } catch (e) {}
+
+        // Deezer
+        try {
+          const deezRes = await fetch(`${WORKER_URL}/proxy-image?url=${encodeURIComponent(`https://api.deezer.com/search?q=${q}&limit=5`)}`);
+          const deezData = await deezRes.json();
+          if (deezData.data) {
+            foundCovers.push(...deezData.data.map(t => t.album.cover_xl));
+          }
+        } catch (e) {}
       }
 
-      // Fallback de Fondos
-      if (foundFanarts.length === 0 && foundCovers.length > 0) {
-        foundFanarts = [foundCovers[foundCovers.length - 1]];
-        newMeta.background_url = foundCovers[foundCovers.length - 1];
+      // Spotify Exact Track Cover
+      const token = await getSpotifyToken();
+      if (token) {
+        try {
+          const q = `track:${cleanTitle} artist:${artistsList[0]}${metadata.year ? ` year:${metadata.year}` : ""}`;
+          const spotRes = await fetch(`${WORKER_URL}/v1/search?q=${encodeURIComponent(q)}&type=track&limit=5`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (spotRes.ok) {
+            const d = await spotRes.json();
+            foundCovers.push(...d.tracks.items.map(t => t.album.images[0]?.url));
+          }
+        } catch (e) {}
       }
 
-      setMetadata(newMeta);
-      setAlternativeCovers(foundCovers);
-      setAlternativeFanarts(foundFanarts);
-      if (foundCovers.length > 0) setCoverUrl(foundCovers[0]);
+      // 2. FONDOS TV (YouTube + Spotify Artist + TheAudioDB)
+      
+      // A) YouTube Thumbnails (Suelen ser el arte oficial del video)
+      try {
+        const ytSearch = await fetch(`${WORKER_URL}/proxy-image?url=${encodeURIComponent(`https://www.youtube.com/results?search_query=${cleanTitle}+${artistsList[0]}+official+video`)}`);
+        const ytHtml = await ytSearch.text();
+        const videoIds = [...ytHtml.matchAll(/"videoId":"(.*?)"/g)].map(m => m[1]).slice(0, 3);
+        videoIds.forEach(id => {
+          allFoundFanarts.push(`https://img.youtube.com/vi/${id}/maxresdefault.jpg`);
+          allFoundFanarts.push(`https://img.youtube.com/vi/${id}/sddefault.jpg`);
+        });
+      } catch (e) {}
+
+      // B) Spotify Artist & Fanarts
+      const adbKey = import.meta.env.VITE_THEAUDIODB_API_KEY || '2';
+      for (const aName of artistsList) {
+        if (token) {
+          try {
+            const spotRes = await fetch(`${WORKER_URL}/v1/search?q=artist:${encodeURIComponent(aName)}&type=artist&limit=1`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (spotRes.ok) {
+              const d = await spotRes.json();
+              const art = d.artists?.items[0];
+              if (art?.images) allFoundFanarts.push(...art.images.map(i => i.url));
+            }
+          } catch (e) {}
+        }
+
+        try {
+          const res = await fetch(`https://www.theaudiodb.com/api/v1/json/${adbKey}/search.php?s=${encodeURIComponent(aName)}`);
+          const data = await res.json();
+          if (data.artists?.[0]) {
+            const art = data.artists[0];
+            for (let i = 1; i <= 10; i++) {
+              const key = i === 1 ? 'strArtistFanart' : `strArtistFanart${i}`;
+              if (art[key]) allFoundFanarts.push(art[key]);
+            }
+          }
+        } catch (e) {}
+      }
+
+      setAlternativeCovers([...new Set(foundCovers)].filter(u => u));
+      setAlternativeFanarts([...new Set(allFoundFanarts)].filter(url => url));
     } catch (err) {
-      console.error("Error en motor de IA:", err);
+      console.error("Error visuales IA:", err);
     } finally {
       setIsAISearching(false);
     }
@@ -243,21 +307,26 @@ export default function MusicManager() {
         const detectedTitle = title || file.name.replace(/\.[^/.]+$/, "");
         const detectedArtist = artist || 'Artista Desconocido';
 
-        // Mapeo avanzado de etiquetas nativas
-        setMetadata(prev => ({
-          ...prev,
+        const initialMeta = {
           title: detectedTitle,
           artist: detectedArtist,
           album: album || '',
           year: year || '',
-          genre: genre || TCON || '', // TCON es el tag nativo de genero
+          genre: genre || TCON || '',
           composer: TCOM?.data || '',
           bpm: TBPM?.data || '',
           key: TKEY?.data || '',
-          label: TPUB?.data || '', // Publisher / Editor
+          label: TPUB?.data || '',
           language: TLAN?.data || '',
-          mood: COMM?.data?.text || '' // A veces el mood viene en comentarios
-        }));
+          mood: COMM?.data?.text || ''
+        };
+
+        setMetadata(prev => {
+          const combined = { ...prev, ...initialMeta };
+          // Guardamos el backup con todo incluido (incluyendo duración si ya llegó)
+          setTimeout(() => setBackupMetadata(combined), 0);
+          return combined;
+        });
         
         if (imageUrl) {
           setCoverUrl(imageUrl);
@@ -316,18 +385,28 @@ export default function MusicManager() {
     multiple: false
   });
 
-  const handleCancel = () => {
-    setFile(null);
-    setMetadata({ title: '', artist: '', album: '', lyrics: '', background_url: '', genre: '', year: '', artist_image: '' });
-    setCoverUrl(null);
-    setUploadStatus(null);
-  };
-
   const [filters, setFilters] = useState({ brightness: 100, contrast: 100, saturate: 100, blur: 0 });
+
+  const [statusModal, setStatusModal] = useState({ show: false, title: '', steps: [], type: 'loading' });
+
+  const updateStatusStep = (stepIndex, status) => {
+    setStatusModal(prev => {
+      const newSteps = [...prev.steps];
+      if (newSteps[stepIndex]) newSteps[stepIndex].status = status;
+      return { ...prev, steps: newSteps };
+    });
+  };
 
   const handleUpload = async () => {
     if (!file) return;
-    setUploadStatus('uploading');
+    
+    const steps = [
+      { label: 'Subiendo archivo MP3 (R2)', status: 'pending' },
+      { label: 'Espejando Portada (R2)', status: 'pending' },
+      { label: 'Espejando Fondo TV (R2)', status: 'pending' }
+    ];
+    
+    setStatusModal({ show: true, title: 'Publicando Obra Maestra', steps, type: 'loading' });
     
     try {
       const safeTitle = metadata.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -335,18 +414,20 @@ export default function MusicManager() {
       let finalCoverUrl = uploadedUrls.cover;
       let finalBackgroundUrl = uploadedUrls.background;
 
-      // 1. Subir MP3 solo si no se ha subido en esta sesión
+      // 1. MP3
+      updateStatusStep(0, 'active');
       if (!finalMp3Url) {
         const mp3Path = `music/${safeTitle}_${currentSessionTimestamp}.mp3`;
         finalMp3Url = await uploadToR2(file, mp3Path);
       }
+      updateStatusStep(0, 'done');
       
-      // 2. Subir Carátula (Local o Externa para Espejo)
+      // 2. Portada
+      updateStatusStep(1, 'active');
       if (!finalCoverUrl && coverUrl) {
         if (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:') || !coverUrl.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
           try {
             const isVideo = coverUrl.includes('video') || coverUrl.includes('.mp4');
-            // Usamos el PROXY del Worker para evitar CORS
             const fetchUrl = (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:')) 
               ? coverUrl 
               : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(coverUrl)}`;
@@ -356,18 +437,16 @@ export default function MusicManager() {
             const ext = isVideo ? 'mp4' : 'jpg';
             const coverPath = `covers/${safeTitle}_${currentSessionTimestamp}.${ext}`;
             finalCoverUrl = await uploadToR2(blob, coverPath);
-          } catch (e) {
-            console.warn("No se pudo espejar la carátula, usando URL original:", e);
-            finalCoverUrl = coverUrl;
-          }
+          } catch (e) { finalCoverUrl = coverUrl; }
         }
       }
+      updateStatusStep(1, 'done');
 
-      // 3. Subir Fondo TV (Local o Externo para Espejo)
+      // 3. Fondo
+      updateStatusStep(2, 'active');
       if (!finalBackgroundUrl && metadata.background_url) {
         if (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:') || !metadata.background_url.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
           try {
-            // Usamos el PROXY del Worker para evitar CORS
             const fetchUrl = (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:')) 
               ? metadata.background_url 
               : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(metadata.background_url)}`;
@@ -376,51 +455,96 @@ export default function MusicManager() {
             const blob = await res.blob();
             const bgPath = `backgrounds/${safeTitle}_bg_${currentSessionTimestamp}.jpg`;
             finalBackgroundUrl = await uploadToR2(blob, bgPath);
-          } catch (e) {
-            console.warn("No se pudo espejar el fondo, usando URL original:", e);
-            finalBackgroundUrl = metadata.background_url;
-          }
+          } catch (e) { finalBackgroundUrl = metadata.background_url; }
         }
       }
+      updateStatusStep(2, 'done');
 
-      // Actualizar estado de archivos subidos para evitar duplicados en el siguiente clic
-      setUploadedUrls({ mp3: finalMp3Url, cover: finalCoverUrl, background: finalBackgroundUrl });
-
-      // 4. Guardar todo en Supabase
-      const { error } = await supabase.from('songs').insert([{
+      // 4. Supabase (En segundo plano)
+      const songData = {
         title: metadata.title,
         artist: metadata.artist,
         album: metadata.album,
         genre: metadata.genre,
-        year: metadata.year ? parseInt(metadata.year) : null,
+        year: (metadata.year && !isNaN(parseInt(metadata.year))) ? parseInt(metadata.year) : null,
         lyrics: metadata.lyrics,
         cover_url: finalCoverUrl,
         background_url: finalBackgroundUrl,
         url: finalMp3Url,
-        is_video: finalCoverUrl?.endsWith('.mp4'),
-        visual_settings: filters,
-        composer: metadata.composer,
-        bpm: metadata.bpm ? parseInt(metadata.bpm) : null,
-        musical_key: metadata.key,
-        label: metadata.label,
-        language: metadata.language,
-        mood: metadata.mood,
-        duration: metadata.duration
-      }]);
+        duration: metadata.duration ? parseFloat(metadata.duration) : 0
+      };
 
+      const { error } = await supabase.from('songs').insert([songData]);
       if (error) throw error;
       
-      console.log("¡Guardado exitoso en Supabase!");
-      setUploadStatus('success');
-      if (fetchSongs) fetchSongs(); 
+      setStatusModal(prev => ({ ...prev, type: 'success' }));
+      
+      if (onMusicAdded) onMusicAdded(); 
+      
       setTimeout(() => {
+        setStatusModal({ show: false, title: '', steps: [], type: 'loading' });
         handleCancel();
-      }, 2000);
+      }, 2500);
       
     } catch (error) {
-      console.error("Error crítico en subida:", error);
-      alert("Error al guardar. Revisa el Worker o la consola.");
-      setUploadStatus(null);
+      console.error("Error crítico Supabase:", error);
+      setStatusModal({ 
+        show: true, 
+        title: 'Error al Sincronizar', 
+        steps: [{ label: error.message || 'Error en base de datos', status: 'error' }], 
+        type: 'error' 
+      });
+    }
+  };
+
+  const handleDelete = async (song) => {
+    if (!window.confirm(`¿Borrar permanentemente "${song.title}"?`)) return;
+
+    const steps = [
+      { label: 'Eliminando archivo MP3 (R2)', status: 'pending' },
+      { label: 'Eliminando Portada (R2)', status: 'pending' },
+      { label: 'Eliminando Fondo TV (R2)', status: 'pending' },
+      { label: 'Limpiando registro en Supabase', status: 'pending' }
+    ];
+    setStatusModal({ show: true, title: 'Eliminando Música y Archivos', steps, type: 'loading' });
+
+    try {
+      const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
+      const getKey = (url) => url?.includes(publicUrl) ? url.replace(`${publicUrl}/`, '') : null;
+
+      const mp3Key = getKey(song.url);
+      const coverKey = getKey(song.cover_url);
+      const bgKey = getKey(song.background_url);
+
+      // 1. MP3
+      updateStatusStep(0, 'active');
+      if (mp3Key) await deleteFromR2(mp3Key);
+      updateStatusStep(0, 'done');
+
+      // 2. Portada
+      updateStatusStep(1, 'active');
+      if (coverKey) await deleteFromR2(coverKey);
+      updateStatusStep(1, 'done');
+
+      // 3. Fondo
+      updateStatusStep(2, 'active');
+      if (bgKey) await deleteFromR2(bgKey);
+      updateStatusStep(2, 'done');
+      
+      // 4. Supabase
+      updateStatusStep(3, 'active');
+      const { error } = await supabase.from('songs').delete().eq('id', song.id);
+      if (error) throw error;
+      updateStatusStep(3, 'done');
+      
+      setStatusModal(prev => ({ ...prev, type: 'success' }));
+      
+      setTimeout(() => {
+        setStatusModal({ show: false, title: '', steps: [], type: 'loading' });
+        fetchSongs();
+      }, 2000);
+    } catch (error) {
+      setStatusModal({ show: true, title: 'Error al eliminar', steps: [{ label: error.message, status: 'error' }], type: 'error' });
     }
   };
 
@@ -472,9 +596,25 @@ export default function MusicManager() {
       )}
 
       {file && !isProcessing && (
-        <div className="dashboard-section" style={{ position: 'relative' }}>
+        <>
+          <div className="dashboard-section" style={{ position: 'relative' }}>
+            {/* Botón Cerrar / Cancelar */}
+            <button 
+              onClick={handleCancel}
+              style={{
+                position: 'absolute', top: '15px', right: '15px', 
+                background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.5)',
+                width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => { e.target.style.background = '#ff4757'; e.target.style.color = 'white'; }}
+              onMouseLeave={(e) => { e.target.style.background = 'rgba(255,255,255,0.05)'; e.target.style.color = 'rgba(255,255,255,0.5)'; }}
+            >
+              <X size={18} />
+            </button>
           
-          <div className="manager-form-container">
+            <div className="manager-form-container">
             {/* Previsualización de Carátula */}
             <div className="manager-cover-preview" style={{ width: '100%', maxWidth: '240px' }}>
               <div className={`premium-cover-container ${metadata.animated ? 'ia-animated' : ''}`} style={{ 
@@ -535,15 +675,6 @@ export default function MusicManager() {
                 </div>
               )}
 
-              {/* Filtros Visuales */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', marginBottom: '5px' }}>
-                <p style={{ fontSize: '0.65rem', color: '#00ffff', margin: '0 0 8px 0', fontWeight: 'bold' }}>FILTROS VISUALES</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <input type="range" min="50" max="200" value={filters.brightness} onChange={(e) => setFilters({...filters, brightness: e.target.value})} style={{ width: '100%', height: '4px' }} />
-                  <input type="range" min="50" max="200" value={filters.contrast} onChange={(e) => setFilters({...filters, contrast: e.target.value})} style={{ width: '100%', height: '4px' }} />
-                  <input type="range" min="50" max="200" value={filters.saturate} onChange={(e) => setFilters({...filters, saturate: e.target.value})} style={{ width: '100%', height: '4px' }} />
-                </div>
-              </div>
 
               <button 
                 onClick={() => setMetadata({...metadata, animated: !metadata.animated})}
@@ -583,84 +714,138 @@ export default function MusicManager() {
                 </h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button 
-                    onClick={() => fetchAIMetadata(metadata.title, metadata.artist)}
+                    onClick={() => fetchAIData(metadata.title, metadata.artist)}
                     disabled={isAISearching}
                     style={{ 
-                      background: 'var(--accent-glow)', border: '1px solid var(--accent-color)', color: 'var(--accent-color)', 
-                      padding: '8px 15px', borderRadius: '10px', fontSize: '0.85rem', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold'
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'white', padding: '6px 12px', borderRadius: '20px',
+                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                      fontSize: '0.65rem', fontWeight: 'bold'
                     }}
                   >
-                    {isAISearching ? <Loader2 size={14} className="spinner" /> : <Sparkles size={14} />}
-                    Sincronizar IA
+                    {isAISearching ? <Loader2 size={12} className="spinner" /> : <Sparkles size={12} />}
+                    1. BUSCAR DATOS
                   </button>
-                  <button onClick={handleCancel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-                    <X size={24} />
+                  <button 
+                    onClick={() => fetchAIVisuals(metadata.title, metadata.artist)}
+                    disabled={isAISearching}
+                    style={{ 
+                      background: 'rgba(0, 255, 255, 0.1)', border: '1px solid var(--accent-color)',
+                      color: 'var(--accent-color)', padding: '6px 12px', borderRadius: '20px',
+                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                      fontSize: '0.65rem', fontWeight: 'bold'
+                    }}
+                  >
+                    {isAISearching ? <Loader2 size={12} className="spinner" /> : <ImageIcon size={12} />}
+                    2. BUSCAR IMÁGENES
+                  </button>
+                  <button 
+                    onClick={revertMetadata}
+                    style={{ 
+                      background: 'rgba(255, 71, 87, 0.1)', border: '1px solid #ff4757',
+                      color: '#ff4757', padding: '6px 12px', borderRadius: '20px',
+                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                      fontSize: '0.65rem', fontWeight: 'bold'
+                    }}
+                  >
+                    REVERTIR
                   </button>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '15px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Título</label>
-                  <input type="text" value={metadata.title} onChange={(e) => setMetadata({...metadata, title: e.target.value})} className="admin-input" />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                    Título
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                      {aiSuggestions?.spotify?.title && aiSuggestions.spotify.title !== metadata.title && (
+                        <button onClick={() => setMetadata({...metadata, title: aiSuggestions.spotify.title})} style={spotifyStyle}>
+                          SPOTIFY: {aiSuggestions.spotify.title}
+                        </button>
+                      )}
+                      {aiSuggestions?.itunes?.title && aiSuggestions.itunes.title !== metadata.title && (
+                        <button onClick={() => setMetadata({...metadata, title: aiSuggestions.itunes.title})} style={itunesStyle}>
+                          ITUNES: {aiSuggestions.itunes.title}
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <input type="text" value={metadata.title || ''} onChange={(e) => setMetadata({...metadata, title: e.target.value})} className="admin-input" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Artista</label>
-                  <input type="text" value={metadata.artist} onChange={(e) => setMetadata({...metadata, artist: e.target.value})} className="admin-input" />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                    Artista
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                      {aiSuggestions?.spotify?.artist && aiSuggestions.spotify.artist !== metadata.artist && (
+                        <button onClick={() => setMetadata({...metadata, artist: aiSuggestions.spotify.artist})} style={spotifyStyle}>
+                          SPOTIFY: {aiSuggestions.spotify.artist}
+                        </button>
+                      )}
+                      {aiSuggestions?.itunes?.artist && aiSuggestions.itunes.artist !== metadata.artist && (
+                        <button onClick={() => setMetadata({...metadata, artist: aiSuggestions.itunes.artist})} style={itunesStyle}>
+                          ITUNES: {aiSuggestions.itunes.artist}
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <input type="text" value={metadata.artist || ''} onChange={(e) => setMetadata({...metadata, artist: e.target.value})} className="admin-input" style={inputStyle} />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Género</label>
-                  <input type="text" value={metadata.genre} onChange={(e) => setMetadata({...metadata, genre: e.target.value})} className="admin-input" />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                    Álbum
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                      {aiSuggestions?.spotify?.album && aiSuggestions.spotify.album !== metadata.album && (
+                        <button onClick={() => setMetadata({...metadata, album: aiSuggestions.spotify.album})} style={spotifyStyle}>
+                          SPOTIFY: {aiSuggestions.spotify.album}
+                        </button>
+                      )}
+                      {aiSuggestions?.itunes?.album && aiSuggestions.itunes.album !== metadata.album && (
+                        <button onClick={() => setMetadata({...metadata, album: aiSuggestions.itunes.album})} style={itunesStyle}>
+                          ITUNES: {aiSuggestions.itunes.album}
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <input type="text" value={metadata.album || ''} onChange={(e) => setMetadata({...metadata, album: e.target.value})} className="admin-input" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Año</label>
-                  <input type="text" value={metadata.year} onChange={(e) => setMetadata({...metadata, year: e.target.value})} className="admin-input" />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                    Año
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                      {aiSuggestions?.itunes?.year && String(aiSuggestions.itunes.year) !== String(metadata.year) && (
+                        <button onClick={() => setMetadata({...metadata, year: aiSuggestions.itunes.year})} style={itunesStyle}>
+                          ITUNES: {aiSuggestions.itunes.year}
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <input type="text" value={metadata.year || ''} onChange={(e) => setMetadata({...metadata, year: e.target.value})} className="admin-input" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Álbum</label>
-                  <input type="text" value={metadata.album} onChange={(e) => setMetadata({...metadata, album: e.target.value})} className="admin-input" />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Duración (seg)</label>
-                  <input type="text" value={metadata.duration} readOnly className="admin-input" style={{ opacity: 0.7 }} />
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                    Género
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                      {aiSuggestions?.itunes?.genre && aiSuggestions.itunes.genre !== metadata.genre && (
+                        <button onClick={() => setMetadata({...metadata, genre: aiSuggestions.itunes.genre})} style={itunesStyle}>
+                          ITUNES: {aiSuggestions.itunes.genre}
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <input type="text" value={metadata.genre || ''} onChange={(e) => setMetadata({...metadata, genre: e.target.value})} className="admin-input" style={inputStyle} />
                 </div>
               </div>
 
-              <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <p style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 'bold', margin: '0 0 15px 0', letterSpacing: '1px' }}>INFORMACIÓN TÉCNICA / AVANZADA</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>Compositor</label>
-                    <input type="text" value={metadata.composer} onChange={(e) => setMetadata({...metadata, composer: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>BPM</label>
-                    <input type="number" value={metadata.bpm} onChange={(e) => setMetadata({...metadata, bpm: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>Tonalidad (Key)</label>
-                    <input type="text" value={metadata.key} onChange={(e) => setMetadata({...metadata, key: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>Sello (Label)</label>
-                    <input type="text" value={metadata.label} onChange={(e) => setMetadata({...metadata, label: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>Idioma</label>
-                    <input type="text" value={metadata.language} onChange={(e) => setMetadata({...metadata, language: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: '5px' }}>Estado de ánimo</label>
-                    <input type="text" value={metadata.mood} onChange={(e) => setMetadata({...metadata, mood: e.target.value})} className="admin-input" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Duración (seg)</label>
+                <input type="text" value={metadata.duration || ''} readOnly className="admin-input" style={{ opacity: 0.7 }} />
               </div>
             </div>
           </div>
+        </div>
 
           {/* Letras y Fanart TV */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '30px', marginTop: '20px' }}>
@@ -679,7 +864,8 @@ export default function MusicManager() {
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--accent-color)', marginBottom: '10px' }}>
                 <ImageIcon size={16} /> Fondo TV (Fanart)
               </label>
-              <div style={{ position: 'relative', height: '180px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+
+              <div style={{ position: 'relative', height: '180px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '15px' }}>
                 {metadata.background_url ? (
                   <img src={metadata.background_url} alt="Fanart" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
@@ -698,26 +884,25 @@ export default function MusicManager() {
                   </label>
                 </div>
               </div>
-              
-              {/* CARRUSEL DE FONDOS TV */}
-              {alternativeFanarts.length > 1 && (
-                <div style={{ marginTop: '10px' }}>
-                   <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
-                      {alternativeFanarts.map((url, idx) => (
-                        <img 
-                          key={idx} 
-                          src={url} 
-                          onClick={() => setMetadata({...metadata, background_url: url})}
-                          style={{ 
-                            width: '80px', height: '45px', borderRadius: '4px', cursor: 'pointer', objectFit: 'cover',
-                            border: metadata.background_url === url ? '2px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.1)',
-                            opacity: metadata.background_url === url ? 1 : 0.6
-                          }} 
-                        />
-                      ))}
-                   </div>
+
+              {/* GALERÍA DE FONDOS ENCONTRADOS */}
+              {alternativeFanarts.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
+                  {alternativeFanarts.map((url, idx) => (
+                    <img 
+                      key={idx} 
+                      src={url} 
+                      onClick={() => setMetadata({...metadata, background_url: url})}
+                      style={{ 
+                        width: '80px', height: '45px', borderRadius: '6px', cursor: 'pointer', objectFit: 'cover',
+                        border: metadata.background_url === url ? '2px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.1)',
+                        opacity: metadata.background_url === url ? 1 : 0.6
+                      }} 
+                    />
+                  ))}
                 </div>
               )}
+              
             </div>
           </div>
 
@@ -742,9 +927,66 @@ export default function MusicManager() {
               )}
             </button>
           </div>
+        </>
+      )}
+
+      {/* MODAL DE ESTADO MAESTRO - Movido fuera para ser global */}
+      {statusModal.show && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '400px', background: '#111', borderRadius: '24px',
+            padding: '30px', border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 30px 60px rgba(0,0,0,0.8)', textAlign: 'center'
+          }}>
+            <div style={{ marginBottom: '20px' }}>
+              {statusModal.type === 'loading' && <Loader2 size={50} className="spinner" style={{ color: 'var(--accent-color)', margin: '0 auto' }} />}
+              {statusModal.type === 'success' && <CheckCircle size={50} style={{ color: '#00e676', margin: '0 auto' }} />}
+              {statusModal.type === 'error' && <X size={50} style={{ color: '#ff4757', margin: '0 auto' }} />}
+            </div>
+            
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '25px', color: 'white' }}>{statusModal.title}</h2>
+            
+            <div style={{ textAlign: 'left', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '15px' }}>
+              {statusModal.steps.map((step, i) => (
+                <div key={i} style={{ 
+                  display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px',
+                  opacity: step.status === 'pending' ? 0.3 : 1,
+                  transition: 'all 0.3s ease'
+                }}>
+                  {step.status === 'done' ? <CheckCircle size={16} color="#00e676" /> : 
+                   step.status === 'active' ? <Loader2 size={16} className="spinner" color="var(--accent-color)" /> :
+                   step.status === 'error' ? <X size={16} color="#ff4757" /> :
+                   <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)' }} />}
+                  <span style={{ fontSize: '0.9rem', color: step.status === 'active' ? 'white' : 'rgba(255,255,255,0.7)' }}>
+                    {step.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {statusModal.type !== 'loading' && (
+              <button 
+                onClick={() => setStatusModal({ ...statusModal, show: false })}
+                style={{ 
+                  marginTop: '25px', width: '100%', padding: '12px', borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white',
+                  fontWeight: 'bold', cursor: 'pointer'
+                }}
+              >
+                Cerrar
+              </button>
+            )}
+          </div>
         </div>
       )}
+
       <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         
         .premium-cover-container.ia-animated {
@@ -798,13 +1040,3 @@ export default function MusicManager() {
     </div>
   );
 }
-
-const inputStyle = {
-  width: '100%',
-  padding: '12px',
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: '8px',
-  color: 'white',
-  fontSize: '1rem'
-};

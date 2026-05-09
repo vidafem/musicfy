@@ -5,63 +5,67 @@ import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut, UploadCloud
 import MusicManager from '../pages/admin/MusicManager';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import MediaLibrary from '../pages/admin/MediaLibrary';
+import UserManager from '../pages/admin/UserManager';
 import './AdminLayout.css';
 
 export default function AdminLayout() {
   const { signOut, user } = useAuthStore();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
 
   // Función para obtener el título según la ruta actual
   const getPageTitle = () => {
     const path = location.pathname;
-    if (path === '/admin') return 'Dashboard General';
-    if (path.includes('/admin/music')) return 'Gestión de Música e IA';
-    if (path.includes('/admin/media')) return 'Media y Fondos';
-    if (path.includes('/admin/users')) return 'Gestión de Usuarios';
-    if (path.includes('/admin/settings')) return 'Configuraciones';
-    return 'Panel de Control';
+    if (path === '/admin') return 'Dashboard';
+    if (path.includes('/admin/music')) return 'Librería & IA';
+    if (path.includes('/admin/media')) return 'Media';
+    if (path.includes('/admin/users')) return 'Usuarios';
+    if (path.includes('/admin/settings')) return 'Ajustes';
+    return 'Panel';
   };
 
   return (
-    <div className={`admin-container ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+    <div className={`admin-container ${isSidebarOpen ? 'sidebar-open' : ''} ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       
       {/* OVERLAY PARA MÓVIL */}
       {isSidebarOpen && <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>}
 
       {/* SIDEBAR */}
-      <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+      <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : ''} ${isSidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="admin-logo">
           <img src="/icono.png" alt="Musicfy" />
-          <h2>Musicfy<span>Admin</span></h2>
+          {!isSidebarCollapsed && <h2>Musicfy<span>Admin</span></h2>}
           <button className="sidebar-close-mobile" onClick={() => setIsSidebarOpen(false)}>
             <CloseIcon size={24} />
           </button>
         </div>
 
         <nav className="admin-nav">
-          <NavLink to="/admin" end onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <LayoutDashboard size={20} /> Dashboard
+          <NavLink to="/admin" end onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Dashboard">
+            <LayoutDashboard size={20} /> {!isSidebarCollapsed && <span>Dashboard</span>}
           </NavLink>
-          <NavLink to="/admin/music" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <Music size={20} /> Librería Musical
+          <NavLink to="/admin/music" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Librería Musical">
+            <Music size={20} /> {!isSidebarCollapsed && <span>Librería Musical</span>}
           </NavLink>
-          <NavLink to="/admin/media" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <ImagePlay size={20} /> Media & Fondos
+          <NavLink to="/admin/media" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Media & Fondos">
+            <ImagePlay size={20} /> {!isSidebarCollapsed && <span>Media & Fondos</span>}
           </NavLink>
-          <NavLink to="/admin/users" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <Users size={20} /> Usuarios
+          <NavLink to="/admin/users" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Usuarios">
+            <Users size={20} /> {!isSidebarCollapsed && <span>Usuarios</span>}
           </NavLink>
-          <NavLink to="/admin/settings" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <Settings size={20} /> Ajustes Generales
+          <NavLink to="/admin/settings" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Configuraciones">
+            <Settings size={20} /> {!isSidebarCollapsed && <span>Ajustes</span>}
           </NavLink>
         </nav>
 
         <div className="admin-user-card">
-          <div className="admin-user-info">
-            <span className="role">Administrador</span>
-            <span className="email">{user?.email || 'admin@musicfy.com'}</span>
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="admin-user-info">
+              <span className="role">Admin</span>
+              <span className="email">{user?.email?.split('@')[0] || 'admin'}</span>
+            </div>
+          )}
           <button className="admin-logout-btn" onClick={signOut} title="Cerrar Sesión">
             <LogOut size={20} />
           </button>
@@ -73,7 +77,13 @@ export default function AdminLayout() {
         
         {/* TOPBAR */}
         <header className="admin-topbar">
-          <button className="sidebar-toggle-btn" onClick={() => setIsSidebarOpen(true)}>
+          <button className="sidebar-toggle-btn" onClick={() => {
+            if (window.innerWidth <= 900) {
+              setIsSidebarOpen(true);
+            } else {
+              setIsSidebarCollapsed(!isSidebarCollapsed);
+            }
+          }}>
             <Menu size={24} />
           </button>
           <h1>{getPageTitle()}</h1>
@@ -85,7 +95,7 @@ export default function AdminLayout() {
             <Route path="/" element={<AdminDashboard />} />
             <Route path="/music" element={<MusicManager />} />
             <Route path="/media" element={<MediaLibrary />} />
-            <Route path="/users" element={<div style={{ padding: '20px' }}>Gestión de Usuarios (Próximamente)</div>} />
+            <Route path="/users" element={<UserManager />} />
             <Route path="/settings" element={<div style={{ padding: '20px' }}>Configuración (Próximamente)</div>} />
           </Routes>
         </div>

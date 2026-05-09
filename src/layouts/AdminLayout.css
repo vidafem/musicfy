@@ -19,7 +19,31 @@
   flex-direction: column;
   padding: 24px 0;
   z-index: 1000;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-sidebar.collapsed {
+  width: 80px;
+  min-width: 80px;
+}
+
+.admin-sidebar.collapsed .admin-logo {
+  padding: 0;
+  justify-content: center;
+}
+
+.admin-sidebar.collapsed .admin-nav {
+  padding: 0 12px;
+}
+
+.admin-sidebar.collapsed .admin-nav-item {
+  justify-content: center;
+  padding: 12px;
+}
+
+.admin-sidebar.collapsed .admin-user-card {
+  padding: 16px 0 0;
+  justify-content: center;
 }
 
 .admin-logo {
@@ -148,13 +172,19 @@
 }
 
 .sidebar-toggle-btn {
-  display: none;
+  display: flex;
   background: none;
   border: none;
   color: white;
   cursor: pointer;
   padding: 10px;
   margin-left: -10px;
+  transition: all 0.3s ease;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
 }
 
 .sidebar-close-mobile {

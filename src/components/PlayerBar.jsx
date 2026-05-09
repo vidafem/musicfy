@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Play, Pause, SkipBack, SkipForward, ChevronDown, Shuffle, Repeat, Heart, ListMusic, MessageSquare, X } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { Monitor, Smartphone, Tv, Volume2, VolumeX } from 'lucide-react';
 import GlassButtonWrapper from './ui/GlassButtonWrapper';
 import './PlayerBar.css';
 import './PlayerError.css';
@@ -30,6 +32,14 @@ export default function PlayerBar() {
   const repeatMode = usePlayerStore(state => state.repeatMode);
   const toggleShuffle = usePlayerStore(state => state.toggleShuffle);
   const toggleRepeat = usePlayerStore(state => state.toggleRepeat);
+  
+  // Connect State
+  const deviceId = usePlayerStore(state => state.deviceId);
+  const activeDeviceId = usePlayerStore(state => state.activeDeviceId);
+  const subscribeToRemoteControl = usePlayerStore(state => state.subscribeToRemoteControl);
+  const transferPlayback = usePlayerStore(state => state.transferPlayback);
+  const syncToCloud = usePlayerStore(state => state.syncToCloud);
+  const user = useAuthStore(state => state.user);
 
   const crossfadeEnabled = useSettingsStore(state => state.crossfadeEnabled);
   const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
@@ -207,10 +217,25 @@ export default function PlayerBar() {
     setTimeout(() => setErrorMessage(null), 6000);
   };
 
-  // Cargar música real de la base de datos al iniciar
+  // Cargar música real y Activar Sincronización Connect
   useEffect(() => {
     fetchSongs();
-  }, []);
+    
+    // Iniciar escucha de control remoto
+    if (user?.id) {
+      const unsubscribe = subscribeToRemoteControl(user.id);
+      return () => unsubscribe();
+    }
+  }, [user?.id]);
+
+  // Actualizar nube periódicamente (cada 10s si soy el maestro)
+  useEffect(() => {
+    if (!isPlaying || activeDeviceId !== deviceId) return;
+    const interval = setInterval(() => {
+      syncToCloud();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isPlaying, activeDeviceId, deviceId]);
 
   // Lógica de inactividad (Idle) para el modo TV
   useEffect(() => {
@@ -312,6 +337,7 @@ export default function PlayerBar() {
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleLoadedMetadata}
         onError={handleAudioError}
+        muted={activeDeviceId && activeDeviceId !== deviceId}
         onEnded={() => {
           if (activeChannel === 'A' && !isMixing) playNext();
         }} 
@@ -321,6 +347,7 @@ export default function PlayerBar() {
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleLoadedMetadata}
         onError={handleAudioError}
+        muted={activeDeviceId && activeDeviceId !== deviceId}
         onEnded={() => {
           if (activeChannel === 'B' && !isMixing) playNext();
         }} 
@@ -480,6 +507,16 @@ export default function PlayerBar() {
                   MIXER
                 </span>
               )}
+              
+              {/* INDICADOR DE CONNECT */}
+              <div 
+                className={`connect-indicator ${activeDeviceId === deviceId ? 'active' : ''}`}
+                onClick={transferPlayback}
+                title={activeDeviceId === deviceId ? "Sonando en este dispositivo" : "Modo Espejo (Click para sonar aquí)"}
+              >
+                {activeDeviceId === deviceId ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                <span>{activeDeviceId === deviceId ? "ACTIVO" : "ESPEJO"}</span>
+              </div>
             </div>
 
             <div className="fs-controls">

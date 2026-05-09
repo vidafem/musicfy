@@ -732,3 +732,51 @@
     border-width: 2px;
   }
 }
+
+/* CONNECT INDICATOR STYLES */
+.connect-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+  margin-left: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.connect-indicator span {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.4);
+}
+
+.connect-indicator.active {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.connect-indicator.active span {
+  color: var(--accent-color);
+}
+
+.connect-indicator:not(.active) {
+  animation: pulseBorder 2s infinite;
+}
+
+@keyframes pulseBorder {
+  0% { border-color: rgba(255,255,255,0.1); }
+  50% { border-color: rgba(255,255,255,0.3); }
+  100% { border-color: rgba(255,255,255,0.1); }
+}
+
+.connect-indicator:hover {
+  background: rgba(255,255,255,0.1);
+  transform: translateY(-2px);
+}
