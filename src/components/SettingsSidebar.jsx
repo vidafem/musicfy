@@ -7,8 +7,6 @@ import './SettingsSidebar.css';
 
 export default function SettingsSidebar({ isOpen, onClose }) {
   // OPTIMIZACIÓN: Selectores específicos para no re-renderizar con el tiempo de la música
-  const animatedCovers = useSettingsStore(state => state.animatedCovers);
-  const toggleAnimatedCovers = useSettingsStore(state => state.toggleAnimatedCovers);
   const { 
     animatedCovers, toggleAnimatedCovers, 
     crossfadeEnabled, toggleCrossfade,
