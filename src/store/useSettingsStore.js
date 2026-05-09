@@ -48,7 +48,10 @@ export const useSettingsStore = create(
 
       // Función para aplicar ajustes recibidos de otro dispositivo
       applyRemoteSettings: (newSettings) => {
+        window._isRemoteSettingsUpdate = true;
         set({ ...newSettings });
+        // Liberamos la bandera después de un breve momento para permitir cambios locales
+        setTimeout(() => { window._isRemoteSettingsUpdate = false; }, 100);
       },
 
       // Guardar en la base de datos de Supabase para persistencia entre sesiones/dispositivos
@@ -113,16 +116,13 @@ export const useSettingsStore = create(
       
       // LÓGICA PARA ELIMINAR CACHÉ
       clearCache: async () => {
-        // En el futuro, la app descargará pedazos de música en caché para ahorrar datos (Cloudflare/Supabase).
-        // Aquí vaciaremos ese caché del navegador manualmente.
         if ('caches' in window) {
           const cacheNames = await caches.keys();
           for (const name of cacheNames) {
             await caches.delete(name);
           }
         }
-        // También limpiaremos el local storage del estado si es necesario
-        alert('Caché, archivos temporales y portadas eliminadas correctamente. Tu app está limpia.');
+        alert('Caché, archivos temporales y portadas eliminadas correctamente.');
       }
     }),
     {
@@ -131,22 +131,28 @@ export const useSettingsStore = create(
   )
 );
 
-// --- SINCRONIZACIÓN AUTOMÁTICA DE AJUSTES ---
-// Escuchamos cualquier cambio en este store y lo enviamos a los demás dispositivos
-useSettingsStore.subscribe((state, prevState) => {
-    // Importamos dinámicamente para evitar dependencias circulares
-    import('./usePlayerStore').then(({ usePlayerStore }) => {
-        const sendCommand = usePlayerStore.getState().sendCommand;
-        if (sendCommand) {
-            // Solo enviamos si realmente algo cambió y no fue una actualización masiva
-            // Enviamos los campos clave para no saturar
-            sendCommand('SYNC_SETTINGS', {
-                accentColor: state.accentColor,
-                accentOpacity: state.accentOpacity,
-                animatedCovers: state.animatedCovers,
-                crossfadeEnabled: state.crossfadeEnabled,
-                crossfadeTime: state.crossfadeTime
-            });
-        }
-    });
+// --- SINCRONIZACIÓN INTELIGENTE DE AJUSTES ---
+let syncTimeout = null;
+useSettingsStore.subscribe((state) => {
+    // Si la actualización viene de otro dispositivo, NO la re-transmitimos
+    if (window._isRemoteSettingsUpdate) return;
+
+    // Usamos un pequeño 'debounce' para no saturar la red con cada movimiento del slider
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+        import('./usePlayerStore').then(({ usePlayerStore }) => {
+            const sendCommand = usePlayerStore.getState().sendCommand;
+            if (sendCommand) {
+                sendCommand('SYNC_SETTINGS', {
+                    accentColor: state.accentColor,
+                    accentOpacity: state.accentOpacity,
+                    animatedCovers: state.animatedCovers,
+                    crossfadeEnabled: state.crossfadeEnabled,
+                    crossfadeTime: state.crossfadeTime,
+                    equalizerEnabled: state.equalizerEnabled,
+                    eqGains: state.eqGains
+                });
+            }
+        });
+    }, 500); // Esperamos 500ms tras el último cambio antes de sincronizar
 });
