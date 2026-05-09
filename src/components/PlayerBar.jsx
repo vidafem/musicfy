@@ -80,6 +80,7 @@ export default function PlayerBar() {
           const currentIndex = queue.findIndex(s => s.id === currentSong.id);
           const nextS = queue[(currentIndex + 1) % queue.length];
           if (nextS) {
+            console.log(`[Deck ${activeChannel === 'A' ? 'B' : 'A'}] 🎧 Preparando tema entrante: "${nextS.title}"`);
             setNextSongInfo(nextS);
             secAudio.src = nextS.url;
             secAudio.volume = 0;
@@ -100,6 +101,7 @@ export default function PlayerBar() {
         if (timeLeft <= 0.2) {
            const savedTime = secAudio.currentTime;
            const savedDuration = secAudio.duration;
+           console.log(`[Mixer] ⚡ Transición completada. El Deck ${activeChannel === 'A' ? 'B' : 'A'} toma el control.`);
            setActiveChannel(activeChannel === 'A' ? 'B' : 'A');
            playNext();
            // Adelantamos la barra de progreso al tiempo de la canción entrante
@@ -160,6 +162,8 @@ export default function PlayerBar() {
     const targetSongUrl = normalize(currentSong.url);
 
     if (currentAudioUrl !== targetSongUrl) {
+      const deckName = activeChannel === 'A' ? 'Deck A' : 'Deck B';
+      console.log(`[${deckName}] 💿 Cargando: "${currentSong.title}" para reproducción inmediata.`);
       activeAudio.src = currentSong.url;
       if (isPlaying && activeDeviceId === deviceId) {
         activeAudio.play().catch(() => {});
