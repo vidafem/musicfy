@@ -185,11 +185,12 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: (song) => {
-    const { currentSong, playbackHistory, activeDeviceId, transferPlayback } = get();
+    const { currentSong, playbackHistory, deviceId, activeDeviceId, transferPlayback } = get();
     
-    // AUTO-RECLAMO: Si no hay nadie activo, tomamos el control automáticamente
-    if (!activeDeviceId) {
-      console.log("[Connect] ⚡ Reclamando audio automáticamente...");
+    // RECLAMO AGRESIVO: Si el usuario pulsa una canción, quiere escucharla AQUÍ.
+    // Solo transferimos si no somos ya el dispositivo activo.
+    if (activeDeviceId !== deviceId) {
+      console.log("[Connect] ⚡ Tomando el control para este dispositivo...");
       transferPlayback();
     }
 

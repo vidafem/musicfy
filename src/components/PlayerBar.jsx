@@ -160,7 +160,6 @@ export default function PlayerBar() {
     const targetSongUrl = normalize(currentSong.url);
 
     if (currentAudioUrl !== targetSongUrl) {
-      console.log(`[Player] Cargando canción en canal ${activeChannel}:`, currentSong.title);
       activeAudio.src = currentSong.url;
       if (isPlaying && activeDeviceId === deviceId) {
         activeAudio.play().catch(() => {});
@@ -293,7 +292,7 @@ export default function PlayerBar() {
   // Detectar si alguien más está reproduciendo al iniciar (Opcional: podemos quitarlo o dejarlo como log)
   useEffect(() => {
     if (activeDeviceId && activeDeviceId !== deviceId) {
-      console.log("Música sonando en otro dispositivo:", activeDeviceId);
+      // Información silenciada para limpieza de consola
     }
   }, [activeDeviceId]);
 
