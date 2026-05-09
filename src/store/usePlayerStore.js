@@ -124,7 +124,8 @@ export const usePlayerStore = create((set, get) => ({
                 currentTime: data.currentTime, 
                 activeDeviceId: data.activeDeviceId 
               });
-              if (data.song && get().currentSong?.id !== data.song.id) {
+              if (data.song) {
+                // Actualizamos siempre para asegurar que tenemos las letras más recientes
                 set({ currentSong: data.song });
               }
               break;
@@ -178,6 +179,8 @@ export const usePlayerStore = create((set, get) => ({
         queue: state.queue.map(s => s.id === songId ? { ...s, ...data } : s),
         currentSong: state.currentSong?.id === songId ? { ...state.currentSong, ...data } : state.currentSong
       }));
+      // Sincronizar estado completo (incluyendo letras) con los espejos
+      get().broadcastState();
     }
   },
 

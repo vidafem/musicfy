@@ -144,20 +144,29 @@ export default function PlayerBar() {
   // Sincronizar SRC con el Canal Activo
   // IMPORTANTE: isMixing NO está en las deps para que el mixer no interfiera
   useEffect(() => {
-    const main = activeChannel === 'A' ? audioARef.current : audioBRef.current;
-    if (!main || !currentSong || isMixingRef.current) return;
-    // Comparación robusta: extraer solo el path/url sin dominio para evitar falsos positivos
+    const main = audioARef.current;
+    const sec = audioBRef.current;
+    if (!main || !sec || !currentSong || isMixingRef.current) return;
+
+    // Determinamos cuál es el audio que debería estar sonando ahora
+    const activeAudio = activeChannel === 'A' ? main : sec;
+    
     const normalize = (url) => {
       try { return new URL(url).pathname + new URL(url).search; } 
       catch { return url; }
     };
-    const mainUrl = normalize(main.src);
-    const songUrl = normalize(currentSong.url);
-    if (mainUrl !== songUrl) {
-      main.src = currentSong.url;
-      if (isPlaying) main.play().catch(() => {});
+
+    const currentAudioUrl = normalize(activeAudio.src);
+    const targetSongUrl = normalize(currentSong.url);
+
+    if (currentAudioUrl !== targetSongUrl) {
+      console.log(`[Player] Cargando canción en canal ${activeChannel}:`, currentSong.title);
+      activeAudio.src = currentSong.url;
+      if (isPlaying && activeDeviceId === deviceId) {
+        activeAudio.play().catch(() => {});
+      }
     }
-  }, [currentSong?.id, activeChannel]);
+  }, [currentSong?.id, activeChannel, activeDeviceId, deviceId]);
 
 
   // Sincronizar PLAY/PAUSE global y CONTROL DE AUDIO
@@ -171,12 +180,17 @@ export default function PlayerBar() {
 
     if (isPlaying) {
       if (isMaster) {
-        if (activeChannel === 'A') main.play().catch(() => {});
-        else sec.play().catch(() => {});
+        if (activeChannel === 'A') {
+          main.play().catch(() => {});
+          sec.pause();
+        } else {
+          sec.play().catch(() => {});
+          main.pause();
+        }
         main.muted = false;
         sec.muted = false;
       } else {
-        // MODO ESPEJO: Silencio total y pausa
+        // MODO ESPEJO: Silencio total y pausa física
         main.pause();
         sec.pause();
         main.muted = true;
