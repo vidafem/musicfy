@@ -32,11 +32,11 @@ const inputStyle = {
 export default function MusicManager({ onMusicAdded }) {
   const [file, setFile] = useState(null);
   const [songs, setSongs] = useState([]);
-  const [metadata, setMetadata] = useState({ 
-    title: '', 
-    artist: '', 
-    album: '', 
-    lyrics: '', 
+  const [metadata, setMetadata] = useState({
+    title: '',
+    artist: '',
+    album: '',
+    lyrics: '',
     background_url: '',
     genre: '',
     year: '',
@@ -85,7 +85,7 @@ export default function MusicManager({ onMusicAdded }) {
       .from('songs')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (!error && data) {
       setSongs(data);
     }
@@ -103,7 +103,7 @@ export default function MusicManager({ onMusicAdded }) {
       const clean = (str) => str?.replace(/\[.*?\]|\(.*?\)/g, "").trim() || "";
       const cleanTitle = clean(title);
       const firstArtist = clean(artist).split(/[&,x\/]|\bfeat\b/i).map(a => a.trim())[0];
-      
+
       let results = { itunes: null, spotify: null };
 
       // Sugerencia iTunes
@@ -122,7 +122,7 @@ export default function MusicManager({ onMusicAdded }) {
             };
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // Sugerencia Spotify
       try {
@@ -144,7 +144,7 @@ export default function MusicManager({ onMusicAdded }) {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       setAiSuggestions(results);
     } catch (e) {
@@ -184,7 +184,7 @@ export default function MusicManager({ onMusicAdded }) {
       const cleanTitle = clean(title);
       const artistsList = artist.split(/[&,x\/]|\bfeat\b/i).map(a => a.trim()).filter(a => a);
       const yearSuffix = metadata.year ? ` ${metadata.year}` : "";
-      
+
       let foundCovers = originalCoverBackup ? [originalCoverBackup] : [];
       let allFoundFanarts = [];
 
@@ -200,7 +200,7 @@ export default function MusicManager({ onMusicAdded }) {
             const d = await itRes.json();
             foundCovers.push(...d.results.map(r => r.artworkUrl100.replace('100x100bb', '1200x1200bb')));
           }
-        } catch (e) {}
+        } catch (e) { }
 
         // Deezer
         try {
@@ -209,7 +209,7 @@ export default function MusicManager({ onMusicAdded }) {
           if (deezData.data) {
             foundCovers.push(...deezData.data.map(t => t.album.cover_xl));
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Spotify Exact Track Cover
@@ -224,11 +224,11 @@ export default function MusicManager({ onMusicAdded }) {
             const d = await spotRes.json();
             foundCovers.push(...d.tracks.items.map(t => t.album.images[0]?.url));
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 2. FONDOS TV (YouTube + Spotify Artist + TheAudioDB)
-      
+
       // A) YouTube Thumbnails (Suelen ser el arte oficial del video)
       try {
         const ytSearch = await fetch(`${WORKER_URL}/proxy-image?url=${encodeURIComponent(`https://www.youtube.com/results?search_query=${cleanTitle}+${artistsList[0]}+official+video`)}`);
@@ -238,7 +238,7 @@ export default function MusicManager({ onMusicAdded }) {
           allFoundFanarts.push(`https://img.youtube.com/vi/${id}/maxresdefault.jpg`);
           allFoundFanarts.push(`https://img.youtube.com/vi/${id}/sddefault.jpg`);
         });
-      } catch (e) {}
+      } catch (e) { }
 
       // B) Spotify Artist & Fanarts
       const adbKey = import.meta.env.VITE_THEAUDIODB_API_KEY || '2';
@@ -253,7 +253,7 @@ export default function MusicManager({ onMusicAdded }) {
               const art = d.artists?.items[0];
               if (art?.images) allFoundFanarts.push(...art.images.map(i => i.url));
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         try {
@@ -266,7 +266,7 @@ export default function MusicManager({ onMusicAdded }) {
               if (art[key]) allFoundFanarts.push(art[key]);
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       setAlternativeCovers([...new Set(foundCovers)].filter(u => u));
@@ -288,12 +288,12 @@ export default function MusicManager({ onMusicAdded }) {
     };
 
     jsmediatags.read(file, {
-      onSuccess: function(tag) {
-        const { 
+      onSuccess: function (tag) {
+        const {
           title, artist, album, year, genre, picture,
           TCOM, TBPM, TKEY, TPUB, TLAN, TCON, COMM
         } = tag.tags;
-        
+
         let imageUrl = null;
         if (picture) {
           const { data, format } = picture;
@@ -327,7 +327,7 @@ export default function MusicManager({ onMusicAdded }) {
           setTimeout(() => setBackupMetadata(combined), 0);
           return combined;
         });
-        
+
         if (imageUrl) {
           setCoverUrl(imageUrl);
           setOriginalCoverBackup(imageUrl);
@@ -339,7 +339,7 @@ export default function MusicManager({ onMusicAdded }) {
           fetchSyncedLyricsOnly(detectedTitle, detectedArtist);
         }
       },
-      onError: function(error) {
+      onError: function (error) {
         const title = file.name.replace(/\.[^/.]+$/, "");
         setMetadata(prev => ({ ...prev, title }));
         setIsProcessing(false);
@@ -367,12 +367,12 @@ export default function MusicManager({ onMusicAdded }) {
   const onDrop = useCallback(acceptedFiles => {
     const droppedFile = acceptedFiles[0];
     if (!droppedFile) return;
-    
+
     setFile(droppedFile);
     setIsProcessing(true);
     setUploadStatus(null);
     setCoverUrl(null);
-    
+
     // Simular un micro-retraso de "IA procesando" para UX
     setTimeout(() => {
       extractMetadata(droppedFile);
@@ -399,15 +399,15 @@ export default function MusicManager({ onMusicAdded }) {
 
   const handleUpload = async () => {
     if (!file) return;
-    
+
     const steps = [
       { label: 'Subiendo archivo MP3 (R2)', status: 'pending' },
       { label: 'Espejando Portada (R2)', status: 'pending' },
       { label: 'Espejando Fondo TV (R2)', status: 'pending' }
     ];
-    
+
     setStatusModal({ show: true, title: 'Publicando Obra Maestra', steps, type: 'loading' });
-    
+
     try {
       const safeTitle = metadata.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       let finalMp3Url = uploadedUrls.mp3;
@@ -421,17 +421,17 @@ export default function MusicManager({ onMusicAdded }) {
         finalMp3Url = await uploadToR2(file, mp3Path);
       }
       updateStatusStep(0, 'done');
-      
+
       // 2. Portada
       updateStatusStep(1, 'active');
       if (!finalCoverUrl && coverUrl) {
         if (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:') || !coverUrl.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
           try {
             const isVideo = coverUrl.includes('video') || coverUrl.includes('.mp4');
-            const fetchUrl = (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:')) 
-              ? coverUrl 
+            const fetchUrl = (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:'))
+              ? coverUrl
               : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(coverUrl)}`;
-            
+
             const res = await fetch(fetchUrl);
             const blob = await res.blob();
             const ext = isVideo ? 'mp4' : 'jpg';
@@ -447,8 +447,8 @@ export default function MusicManager({ onMusicAdded }) {
       if (!finalBackgroundUrl && metadata.background_url) {
         if (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:') || !metadata.background_url.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
           try {
-            const fetchUrl = (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:')) 
-              ? metadata.background_url 
+            const fetchUrl = (metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:'))
+              ? metadata.background_url
               : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(metadata.background_url)}`;
 
             const res = await fetch(fetchUrl);
@@ -460,7 +460,7 @@ export default function MusicManager({ onMusicAdded }) {
       }
       updateStatusStep(2, 'done');
 
-      // 4. Supabase (En segundo plano)
+      // 4. Supabase (Ehn segundo plano)
       const songData = {
         title: metadata.title,
         artist: metadata.artist,
@@ -476,23 +476,23 @@ export default function MusicManager({ onMusicAdded }) {
 
       const { error } = await supabase.from('songs').insert([songData]);
       if (error) throw error;
-      
+
       setStatusModal(prev => ({ ...prev, type: 'success' }));
-      
-      if (onMusicAdded) onMusicAdded(); 
-      
+
+      if (onMusicAdded) onMusicAdded();
+
       setTimeout(() => {
         setStatusModal({ show: false, title: '', steps: [], type: 'loading' });
         handleCancel();
       }, 2500);
-      
+
     } catch (error) {
       console.error("Error crítico Supabase:", error);
-      setStatusModal({ 
-        show: true, 
-        title: 'Error al Sincronizar', 
-        steps: [{ label: error.message || 'Error en base de datos', status: 'error' }], 
-        type: 'error' 
+      setStatusModal({
+        show: true,
+        title: 'Error al Sincronizar',
+        steps: [{ label: error.message || 'Error en base de datos', status: 'error' }],
+        type: 'error'
       });
     }
   };
@@ -530,15 +530,15 @@ export default function MusicManager({ onMusicAdded }) {
       updateStatusStep(2, 'active');
       if (bgKey) await deleteFromR2(bgKey);
       updateStatusStep(2, 'done');
-      
+
       // 4. Supabase
       updateStatusStep(3, 'active');
       const { error } = await supabase.from('songs').delete().eq('id', song.id);
       if (error) throw error;
       updateStatusStep(3, 'done');
-      
+
       setStatusModal(prev => ({ ...prev, type: 'success' }));
-      
+
       setTimeout(() => {
         setStatusModal({ show: false, title: '', steps: [], type: 'loading' });
         fetchSongs();
@@ -553,23 +553,23 @@ export default function MusicManager({ onMusicAdded }) {
   return (
     <div style={{ animation: 'fadeIn 0.5s ease', width: '100%' }}>
       {/* HEADER ELIMINADO PARA EVITAR DUPLICIDAD CON EL TOPBAR */}
-      
+
       {!file && (
-        <div 
-          {...getRootProps()} 
+        <div
+          {...getRootProps()}
           className={`upload-zone ${isDragActive ? 'active' : ''}`}
-          style={{ 
-            padding: '40px 20px', 
-            minHeight: '200px', 
-            display: 'flex', 
-            flexDirection: 'column', 
+          style={{
+            padding: '40px 20px',
+            minHeight: '200px',
+            display: 'flex',
+            flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center'
           }}
         >
           <input {...getInputProps()} />
-          <div style={{ 
-            width: '80px', height: '80px', borderRadius: '50%', background: 'var(--accent-glow)', 
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '50%', background: 'var(--accent-glow)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
             color: 'var(--accent-color)',
             boxShadow: '0 0 20px var(--accent-glow)'
@@ -599,10 +599,10 @@ export default function MusicManager({ onMusicAdded }) {
         <>
           <div className="dashboard-section" style={{ position: 'relative' }}>
             {/* Botón Cerrar / Cancelar */}
-            <button 
+            <button
               onClick={handleCancel}
               style={{
-                position: 'absolute', top: '15px', right: '15px', 
+                position: 'absolute', top: '15px', right: '15px',
                 background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.5)',
                 width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
@@ -613,239 +613,239 @@ export default function MusicManager({ onMusicAdded }) {
             >
               <X size={18} />
             </button>
-          
+
             <div className="manager-form-container">
-            {/* Previsualización de Carátula */}
-            <div className="manager-cover-preview" style={{ width: '100%', maxWidth: '240px' }}>
-              <div className={`premium-cover-container ${metadata.animated ? 'ia-animated' : ''}`} style={{ 
-                position: 'relative', 
-                borderRadius: '12px', 
-                overflow: 'hidden',
-                width: '100%',
-                aspectRatio: '1/1',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-                background: '#000',
-                marginBottom: '20px'
-              }}>
-                {coverUrl ? (
-                  <>
-                    {coverUrl.includes('.mp4') || coverUrl.startsWith('data:video') ? (
-                      <video src={coverUrl} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <img 
-                        src={coverUrl} 
-                        alt="Carátula" 
-                        className="animated-cover" 
-                        style={{ 
-                          width: '100%', 
-                          display: 'block',
-                          filter: `brightness(${filters.brightness}%) contrast(${filters.contrast}%) saturate(${filters.saturate}%) blur(${filters.blur}px)`
-                        }} 
-                      />
-                    )}
-                    <div className="shine-overlay"></div>
-                    {metadata.animated && <div className="sparkle-particles"></div>}
-                  </>
-                ) : (
-                  <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'rgba(255,255,255,0.3)' }}>
-                    <ImageIcon size={40} style={{ marginBottom: '10px' }} />
-                    <span>Sin Visual</span>
-                  </div>
-                )}
-              </div>
-              
-              {/* CARRUSEL DE OPCIONES DE CARÁTULA */}
-              {alternativeCovers.length > 1 && (
-                <div style={{ marginBottom: '20px' }}>
-                   <p style={{ fontSize: '0.65rem', color: 'var(--accent-color)', margin: '0 0 10px 0', fontWeight: 'bold' }}>CAMBIAR PORTADA</p>
-                   <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
+              {/* Previsualización de Carátula */}
+              <div className="manager-cover-preview" style={{ width: '100%', maxWidth: '240px' }}>
+                <div className={`premium-cover-container ${metadata.animated ? 'ia-animated' : ''}`} style={{
+                  position: 'relative',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  width: '100%',
+                  aspectRatio: '1/1',
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                  background: '#000',
+                  marginBottom: '20px'
+                }}>
+                  {coverUrl ? (
+                    <>
+                      {coverUrl.includes('.mp4') || coverUrl.startsWith('data:video') ? (
+                        <video src={coverUrl} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <img
+                          src={coverUrl}
+                          alt="Carátula"
+                          className="animated-cover"
+                          style={{
+                            width: '100%',
+                            display: 'block',
+                            filter: `brightness(${filters.brightness}%) contrast(${filters.contrast}%) saturate(${filters.saturate}%) blur(${filters.blur}px)`
+                          }}
+                        />
+                      )}
+                      <div className="shine-overlay"></div>
+                      {metadata.animated && <div className="sparkle-particles"></div>}
+                    </>
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'rgba(255,255,255,0.3)' }}>
+                      <ImageIcon size={40} style={{ marginBottom: '10px' }} />
+                      <span>Sin Visual</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* CARRUSEL DE OPCIONES DE CARÁTULA */}
+                {alternativeCovers.length > 1 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--accent-color)', margin: '0 0 10px 0', fontWeight: 'bold' }}>CAMBIAR PORTADA</p>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
                       {alternativeCovers.map((url, idx) => (
-                        <img 
-                          key={idx} 
-                          src={url} 
+                        <img
+                          key={idx}
+                          src={url}
                           onClick={() => setCoverUrl(url)}
-                          style={{ 
+                          style={{
                             width: '50px', height: '50px', borderRadius: '6px', cursor: 'pointer',
                             border: coverUrl === url ? '2px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.1)',
                             opacity: coverUrl === url ? 1 : 0.6
-                          }} 
+                          }}
                         />
                       ))}
-                   </div>
-                </div>
-              )}
+                    </div>
+                  </div>
+                )}
 
 
-              <button 
-                onClick={() => setMetadata({...metadata, animated: !metadata.animated})}
-                style={{
-                  width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #00ffff',
-                  background: metadata.animated ? '#00ffff' : 'transparent',
-                  color: metadata.animated ? 'black' : '#00ffff',
-                  fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginBottom: '8px'
-                }}
-              >
-                <Sparkles size={14} />
-                {metadata.animated ? 'ANIMACIÓN ACTIVA' : 'PROCESAR ANIMACIÓN IA'}
-              </button>
-              
-              <label style={{
-                width: '100%', padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)',
-                color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textAlign: 'center', cursor: 'pointer',
-                border: '1px dashed rgba(255,255,255,0.2)', display: 'block'
-              }}>
-                SUBIR MP4 / LOOP
-                <input type="file" accept="video/mp4" hidden onChange={async (e) => {
-                  const vidFile = e.target.files[0];
-                  if (vidFile) {
-                    const vidUrl = URL.createObjectURL(vidFile);
-                    setCoverUrl(vidUrl);
-                  }
-                }} />
-              </label>
-            </div>
+                <button
+                  onClick={() => setMetadata({ ...metadata, animated: !metadata.animated })}
+                  style={{
+                    width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #00ffff',
+                    background: metadata.animated ? '#00ffff' : 'transparent',
+                    color: metadata.animated ? 'black' : '#00ffff',
+                    fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginBottom: '8px'
+                  }}
+                >
+                  <Sparkles size={14} />
+                  {metadata.animated ? 'ANIMACIÓN ACTIVA' : 'PROCESAR ANIMACIÓN IA'}
+                </button>
 
-            {/* Formulario Principal */}
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
-                  <CheckCircle size={20} color="var(--accent-color)" /> Clasificación Inteligente
-                </h3>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button 
-                    onClick={() => fetchAIData(metadata.title, metadata.artist)}
-                    disabled={isAISearching}
-                    style={{ 
-                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'white', padding: '6px 12px', borderRadius: '20px',
-                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-                      fontSize: '0.65rem', fontWeight: 'bold'
-                    }}
-                  >
-                    {isAISearching ? <Loader2 size={12} className="spinner" /> : <Sparkles size={12} />}
-                    1. BUSCAR DATOS
-                  </button>
-                  <button 
-                    onClick={() => fetchAIVisuals(metadata.title, metadata.artist)}
-                    disabled={isAISearching}
-                    style={{ 
-                      background: 'rgba(0, 255, 255, 0.1)', border: '1px solid var(--accent-color)',
-                      color: 'var(--accent-color)', padding: '6px 12px', borderRadius: '20px',
-                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-                      fontSize: '0.65rem', fontWeight: 'bold'
-                    }}
-                  >
-                    {isAISearching ? <Loader2 size={12} className="spinner" /> : <ImageIcon size={12} />}
-                    2. BUSCAR IMÁGENES
-                  </button>
-                  <button 
-                    onClick={revertMetadata}
-                    style={{ 
-                      background: 'rgba(255, 71, 87, 0.1)', border: '1px solid #ff4757',
-                      color: '#ff4757', padding: '6px 12px', borderRadius: '20px',
-                      display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-                      fontSize: '0.65rem', fontWeight: 'bold'
-                    }}
-                  >
-                    REVERTIR
-                  </button>
-                </div>
+                <label style={{
+                  width: '100%', padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textAlign: 'center', cursor: 'pointer',
+                  border: '1px dashed rgba(255,255,255,0.2)', display: 'block'
+                }}>
+                  SUBIR MP4 / LOOP
+                  <input type="file" accept="video/mp4" hidden onChange={async (e) => {
+                    const vidFile = e.target.files[0];
+                    if (vidFile) {
+                      const vidUrl = URL.createObjectURL(vidFile);
+                      setCoverUrl(vidUrl);
+                    }
+                  }} />
+                </label>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '15px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
-                    Título
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                      {aiSuggestions?.spotify?.title && aiSuggestions.spotify.title !== metadata.title && (
-                        <button onClick={() => setMetadata({...metadata, title: aiSuggestions.spotify.title})} style={spotifyStyle}>
-                          SPOTIFY: {aiSuggestions.spotify.title}
-                        </button>
-                      )}
-                      {aiSuggestions?.itunes?.title && aiSuggestions.itunes.title !== metadata.title && (
-                        <button onClick={() => setMetadata({...metadata, title: aiSuggestions.itunes.title})} style={itunesStyle}>
-                          ITUNES: {aiSuggestions.itunes.title}
-                        </button>
-                      )}
-                    </div>
-                  </label>
-                  <input type="text" value={metadata.title || ''} onChange={(e) => setMetadata({...metadata, title: e.target.value})} className="admin-input" style={inputStyle} />
+              {/* Formulario Principal */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
+                    <CheckCircle size={20} color="var(--accent-color)" /> Clasificación Inteligente
+                  </h3>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => fetchAIData(metadata.title, metadata.artist)}
+                      disabled={isAISearching}
+                      style={{
+                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'white', padding: '6px 12px', borderRadius: '20px',
+                        display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                        fontSize: '0.65rem', fontWeight: 'bold'
+                      }}
+                    >
+                      {isAISearching ? <Loader2 size={12} className="spinner" /> : <Sparkles size={12} />}
+                      1. BUSCAR DATOS
+                    </button>
+                    <button
+                      onClick={() => fetchAIVisuals(metadata.title, metadata.artist)}
+                      disabled={isAISearching}
+                      style={{
+                        background: 'rgba(0, 255, 255, 0.1)', border: '1px solid var(--accent-color)',
+                        color: 'var(--accent-color)', padding: '6px 12px', borderRadius: '20px',
+                        display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                        fontSize: '0.65rem', fontWeight: 'bold'
+                      }}
+                    >
+                      {isAISearching ? <Loader2 size={12} className="spinner" /> : <ImageIcon size={12} />}
+                      2. BUSCAR IMÁGENES
+                    </button>
+                    <button
+                      onClick={revertMetadata}
+                      style={{
+                        background: 'rgba(255, 71, 87, 0.1)', border: '1px solid #ff4757',
+                        color: '#ff4757', padding: '6px 12px', borderRadius: '20px',
+                        display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                        fontSize: '0.65rem', fontWeight: 'bold'
+                      }}
+                    >
+                      REVERTIR
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
-                    Artista
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                      {aiSuggestions?.spotify?.artist && aiSuggestions.spotify.artist !== metadata.artist && (
-                        <button onClick={() => setMetadata({...metadata, artist: aiSuggestions.spotify.artist})} style={spotifyStyle}>
-                          SPOTIFY: {aiSuggestions.spotify.artist}
-                        </button>
-                      )}
-                      {aiSuggestions?.itunes?.artist && aiSuggestions.itunes.artist !== metadata.artist && (
-                        <button onClick={() => setMetadata({...metadata, artist: aiSuggestions.itunes.artist})} style={itunesStyle}>
-                          ITUNES: {aiSuggestions.itunes.artist}
-                        </button>
-                      )}
-                    </div>
-                  </label>
-                  <input type="text" value={metadata.artist || ''} onChange={(e) => setMetadata({...metadata, artist: e.target.value})} className="admin-input" style={inputStyle} />
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '20px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
-                    Álbum
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                      {aiSuggestions?.spotify?.album && aiSuggestions.spotify.album !== metadata.album && (
-                        <button onClick={() => setMetadata({...metadata, album: aiSuggestions.spotify.album})} style={spotifyStyle}>
-                          SPOTIFY: {aiSuggestions.spotify.album}
-                        </button>
-                      )}
-                      {aiSuggestions?.itunes?.album && aiSuggestions.itunes.album !== metadata.album && (
-                        <button onClick={() => setMetadata({...metadata, album: aiSuggestions.itunes.album})} style={itunesStyle}>
-                          ITUNES: {aiSuggestions.itunes.album}
-                        </button>
-                      )}
-                    </div>
-                  </label>
-                  <input type="text" value={metadata.album || ''} onChange={(e) => setMetadata({...metadata, album: e.target.value})} className="admin-input" style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '15px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                      Título
+                      <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                        {aiSuggestions?.spotify?.title && aiSuggestions.spotify.title !== metadata.title && (
+                          <button onClick={() => setMetadata({ ...metadata, title: aiSuggestions.spotify.title })} style={spotifyStyle}>
+                            SPOTIFY: {aiSuggestions.spotify.title}
+                          </button>
+                        )}
+                        {aiSuggestions?.itunes?.title && aiSuggestions.itunes.title !== metadata.title && (
+                          <button onClick={() => setMetadata({ ...metadata, title: aiSuggestions.itunes.title })} style={itunesStyle}>
+                            ITUNES: {aiSuggestions.itunes.title}
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                    <input type="text" value={metadata.title || ''} onChange={(e) => setMetadata({ ...metadata, title: e.target.value })} className="admin-input" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                      Artista
+                      <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                        {aiSuggestions?.spotify?.artist && aiSuggestions.spotify.artist !== metadata.artist && (
+                          <button onClick={() => setMetadata({ ...metadata, artist: aiSuggestions.spotify.artist })} style={spotifyStyle}>
+                            SPOTIFY: {aiSuggestions.spotify.artist}
+                          </button>
+                        )}
+                        {aiSuggestions?.itunes?.artist && aiSuggestions.itunes.artist !== metadata.artist && (
+                          <button onClick={() => setMetadata({ ...metadata, artist: aiSuggestions.itunes.artist })} style={itunesStyle}>
+                            ITUNES: {aiSuggestions.itunes.artist}
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                    <input type="text" value={metadata.artist || ''} onChange={(e) => setMetadata({ ...metadata, artist: e.target.value })} className="admin-input" style={inputStyle} />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
-                    Año
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                      {aiSuggestions?.itunes?.year && String(aiSuggestions.itunes.year) !== String(metadata.year) && (
-                        <button onClick={() => setMetadata({...metadata, year: aiSuggestions.itunes.year})} style={itunesStyle}>
-                          ITUNES: {aiSuggestions.itunes.year}
-                        </button>
-                      )}
-                    </div>
-                  </label>
-                  <input type="text" value={metadata.year || ''} onChange={(e) => setMetadata({...metadata, year: e.target.value})} className="admin-input" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
-                    Género
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                      {aiSuggestions?.itunes?.genre && aiSuggestions.itunes.genre !== metadata.genre && (
-                        <button onClick={() => setMetadata({...metadata, genre: aiSuggestions.itunes.genre})} style={itunesStyle}>
-                          ITUNES: {aiSuggestions.itunes.genre}
-                        </button>
-                      )}
-                    </div>
-                  </label>
-                  <input type="text" value={metadata.genre || ''} onChange={(e) => setMetadata({...metadata, genre: e.target.value})} className="admin-input" style={inputStyle} />
-                </div>
-              </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Duración (seg)</label>
-                <input type="text" value={metadata.duration || ''} readOnly className="admin-input" style={{ opacity: 0.7 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                      Álbum
+                      <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                        {aiSuggestions?.spotify?.album && aiSuggestions.spotify.album !== metadata.album && (
+                          <button onClick={() => setMetadata({ ...metadata, album: aiSuggestions.spotify.album })} style={spotifyStyle}>
+                            SPOTIFY: {aiSuggestions.spotify.album}
+                          </button>
+                        )}
+                        {aiSuggestions?.itunes?.album && aiSuggestions.itunes.album !== metadata.album && (
+                          <button onClick={() => setMetadata({ ...metadata, album: aiSuggestions.itunes.album })} style={itunesStyle}>
+                            ITUNES: {aiSuggestions.itunes.album}
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                    <input type="text" value={metadata.album || ''} onChange={(e) => setMetadata({ ...metadata, album: e.target.value })} className="admin-input" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                      Año
+                      <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                        {aiSuggestions?.itunes?.year && String(aiSuggestions.itunes.year) !== String(metadata.year) && (
+                          <button onClick={() => setMetadata({ ...metadata, year: aiSuggestions.itunes.year })} style={itunesStyle}>
+                            ITUNES: {aiSuggestions.itunes.year}
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                    <input type="text" value={metadata.year || ''} onChange={(e) => setMetadata({ ...metadata, year: e.target.value })} className="admin-input" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>
+                      Género
+                      <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+                        {aiSuggestions?.itunes?.genre && aiSuggestions.itunes.genre !== metadata.genre && (
+                          <button onClick={() => setMetadata({ ...metadata, genre: aiSuggestions.itunes.genre })} style={itunesStyle}>
+                            ITUNES: {aiSuggestions.itunes.genre}
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                    <input type="text" value={metadata.genre || ''} onChange={(e) => setMetadata({ ...metadata, genre: e.target.value })} className="admin-input" style={inputStyle} />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '5px' }}>Duración (seg)</label>
+                  <input type="text" value={metadata.duration || ''} readOnly className="admin-input" style={{ opacity: 0.7 }} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
           {/* Letras y Fanart TV */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '30px', marginTop: '20px' }}>
@@ -853,9 +853,9 @@ export default function MusicManager({ onMusicAdded }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--accent-color)', marginBottom: '10px' }}>
                 <Music size={16} /> Letras Sincronizadas
               </label>
-              <textarea 
-                value={metadata.lyrics} 
-                onChange={(e) => setMetadata({...metadata, lyrics: e.target.value})}
+              <textarea
+                value={metadata.lyrics}
+                onChange={(e) => setMetadata({ ...metadata, lyrics: e.target.value })}
                 className="admin-input"
                 style={{ height: '180px', resize: 'none', fontSize: '0.85rem' }}
               />
@@ -878,7 +878,7 @@ export default function MusicManager({ onMusicAdded }) {
                       const file = e.target.files[0];
                       if (file) {
                         const url = URL.createObjectURL(file);
-                        setMetadata({...metadata, background_url: url});
+                        setMetadata({ ...metadata, background_url: url });
                       }
                     }} />
                   </label>
@@ -889,29 +889,29 @@ export default function MusicManager({ onMusicAdded }) {
               {alternativeFanarts.length > 0 && (
                 <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
                   {alternativeFanarts.map((url, idx) => (
-                    <img 
-                      key={idx} 
-                      src={url} 
-                      onClick={() => setMetadata({...metadata, background_url: url})}
-                      style={{ 
+                    <img
+                      key={idx}
+                      src={url}
+                      onClick={() => setMetadata({ ...metadata, background_url: url })}
+                      style={{
                         width: '80px', height: '45px', borderRadius: '6px', cursor: 'pointer', objectFit: 'cover',
                         border: metadata.background_url === url ? '2px solid var(--accent-color)' : '1px solid rgba(255,255,255,0.1)',
                         opacity: metadata.background_url === url ? 1 : 0.6
-                      }} 
+                      }}
                     />
                   ))}
                 </div>
               )}
-              
+
             </div>
           </div>
 
           <div style={{ marginTop: '30px' }}>
-            <button 
+            <button
               onClick={handleUpload}
               disabled={uploadStatus === 'uploading' || uploadStatus === 'success'}
-              style={{ 
-                width: '100%', background: uploadStatus === 'success' ? '#00e676' : 'var(--accent-color)', color: 'black', border: 'none', 
+              style={{
+                width: '100%', background: uploadStatus === 'success' ? '#00e676' : 'var(--accent-color)', color: 'black', border: 'none',
                 padding: '18px', borderRadius: '15px', fontWeight: 'bold', cursor: 'pointer',
                 display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
                 fontSize: '1.1rem',
@@ -948,20 +948,20 @@ export default function MusicManager({ onMusicAdded }) {
               {statusModal.type === 'success' && <CheckCircle size={50} style={{ color: '#00e676', margin: '0 auto' }} />}
               {statusModal.type === 'error' && <X size={50} style={{ color: '#ff4757', margin: '0 auto' }} />}
             </div>
-            
+
             <h2 style={{ fontSize: '1.4rem', marginBottom: '25px', color: 'white' }}>{statusModal.title}</h2>
-            
+
             <div style={{ textAlign: 'left', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '15px' }}>
               {statusModal.steps.map((step, i) => (
-                <div key={i} style={{ 
+                <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px',
                   opacity: step.status === 'pending' ? 0.3 : 1,
                   transition: 'all 0.3s ease'
                 }}>
-                  {step.status === 'done' ? <CheckCircle size={16} color="#00e676" /> : 
-                   step.status === 'active' ? <Loader2 size={16} className="spinner" color="var(--accent-color)" /> :
-                   step.status === 'error' ? <X size={16} color="#ff4757" /> :
-                   <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)' }} />}
+                  {step.status === 'done' ? <CheckCircle size={16} color="#00e676" /> :
+                    step.status === 'active' ? <Loader2 size={16} className="spinner" color="var(--accent-color)" /> :
+                      step.status === 'error' ? <X size={16} color="#ff4757" /> :
+                        <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)' }} />}
                   <span style={{ fontSize: '0.9rem', color: step.status === 'active' ? 'white' : 'rgba(255,255,255,0.7)' }}>
                     {step.label}
                   </span>
@@ -970,9 +970,9 @@ export default function MusicManager({ onMusicAdded }) {
             </div>
 
             {statusModal.type !== 'loading' && (
-              <button 
+              <button
                 onClick={() => setStatusModal({ ...statusModal, show: false })}
-                style={{ 
+                style={{
                   marginTop: '25px', width: '100%', padding: '12px', borderRadius: '12px',
                   background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white',
                   fontWeight: 'bold', cursor: 'pointer'
