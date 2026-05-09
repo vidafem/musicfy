@@ -29,10 +29,11 @@ export default function ClientLayout() {
     root.style.setProperty('--accent-color', accentColor);
     root.style.setProperty('--accent-opacity', accentOpacity);
     
-    // Generar el resplandor (glow) dinámico
+    // Generar el resplandor (glow) y valores RGB dinámicos
     const r = parseInt(accentColor.slice(1, 3), 16);
     const g = parseInt(accentColor.slice(3, 5), 16);
     const b = parseInt(accentColor.slice(5, 7), 16);
+    root.style.setProperty('--accent-color-rgb', `${r}, ${g}, ${b}`);
     root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.5)`);
   }, [accentColor, accentOpacity]);
 

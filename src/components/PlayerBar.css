@@ -733,52 +733,44 @@
   }
 }
 
-/* CONNECT INDICATOR STYLES */
+/* CONNECT INDICATOR STYLES - NUEVO DISEÑO MINIMALISTA */
 .connect-indicator {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 20px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 50%;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   user-select: none;
   margin-left: 15px;
   backdrop-filter: blur(10px);
+  position: relative;
 }
 
-.connect-indicator span {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: rgba(255,255,255,0.4);
+.connect-indicator.is-principal {
+  background: rgba(0, 255, 255, 0.05);
+  border-color: rgba(var(--accent-color-rgb), 0.3);
+  box-shadow: 0 0 20px rgba(var(--accent-color-rgb), 0.15),
+              inset 0 0 10px rgba(var(--accent-color-rgb), 0.05);
 }
 
-.connect-indicator.active {
-  background: rgba(0, 255, 255, 0.1);
-  border-color: var(--accent-color);
-  box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-}
-
-.connect-indicator.active span {
-  color: var(--accent-color);
-}
-
-.connect-indicator:not(.active) {
-  animation: pulseBorder 2s infinite;
-}
-
-@keyframes pulseBorder {
-  0% { border-color: rgba(255,255,255,0.1); }
-  50% { border-color: rgba(255,255,255,0.3); }
-  100% { border-color: rgba(255,255,255,0.1); }
+.connect-indicator.is-mirror {
+  opacity: 0.7;
 }
 
 .connect-indicator:hover {
   background: rgba(255,255,255,0.1);
-  transform: translateY(-2px);
+  transform: scale(1.1) rotate(5deg);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.connect-indicator.is-principal:hover {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 25px rgba(var(--accent-color-rgb), 0.3);
 }
 
 /* CONNECT PRO - DEVICE SELECTOR */
@@ -908,6 +900,18 @@
 @keyframes barAnim {
   from { height: 4px; }
   to { height: 15px; }
+}
+
+.neon-bars {
+  height: 18px;
+  gap: 3px;
+}
+
+.neon-bars span {
+  width: 4px;
+  background: var(--accent-color);
+  box-shadow: 0 0 12px var(--accent-glow);
+  filter: brightness(1.2);
 }
 
 .transfer-full-btn {

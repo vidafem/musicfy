@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Play, Pause, SkipBack, SkipForward, ChevronDown, Shuffle, Repeat, Heart, ListMusic, MessageSquare, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, ChevronDown, Shuffle, Repeat, Heart, ListMusic, MessageSquare, Activity, X } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -583,11 +583,19 @@ export default function PlayerBar() {
               {/* INDICADOR DE CONNECT Y SELECTOR DE DISPOSITIVOS */}
               <div className="connect-wrapper">
                 <div 
-                  className={`connect-indicator ${activeDeviceId === deviceId ? 'active' : ''}`}
+                  className={`connect-indicator ${activeDeviceId === deviceId ? 'is-principal' : 'is-mirror'}`}
                   onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+                  title={activeDeviceId === deviceId ? "Dispositivo Principal" : "Modo Espejo"}
                 >
-                  {activeDeviceId === deviceId ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                  <span>{activeDeviceId === deviceId ? "ACTIVO" : "ESPEJO"}</span>
+                  {activeDeviceId === deviceId ? (
+                    <div className="playing-bars neon-bars">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  ) : (
+                    <Activity size={20} className="neon-inactive" style={{ color: 'rgba(255,255,255,0.2)' }} />
+                  )}
                 </div>
 
                 {showDeviceSelector && (
