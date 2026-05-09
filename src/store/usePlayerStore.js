@@ -185,11 +185,17 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: (song) => {
-    const { currentSong, playbackHistory } = get();
+    const { currentSong, playbackHistory, activeDeviceId, transferPlayback } = get();
     
+    // AUTO-RECLAMO: Si no hay nadie activo, tomamos el control automáticamente
+    if (!activeDeviceId) {
+      console.log("[Connect] ⚡ Reclamando audio automáticamente...");
+      transferPlayback();
+    }
+
     // Si ya hay una canción sonando, la guardamos en el historial antes de cambiar
     if (currentSong && currentSong.id !== song.id) {
-      set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) }); // Guardamos las últimas 50
+      set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) });
     }
 
     set({ currentSong: song, isPlaying: true });
@@ -198,9 +204,17 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   togglePlay: () => {
-    const newState = !get().isPlaying;
+    const { isPlaying, activeDeviceId, transferPlayback, sendCommand } = get();
+    const newState = !isPlaying;
+    
+    // Si vamos a poner PLAY y no hay nadie activo, tomamos el control
+    if (newState && !activeDeviceId) {
+      console.log("[Connect] ⚡ Reclamando audio al pulsar Play...");
+      transferPlayback();
+    }
+
     set({ isPlaying: newState });
-    get().sendCommand('TOGGLE_PLAY', { isPlaying: newState });
+    sendCommand('TOGGLE_PLAY', { isPlaying: newState });
   },
 
   setVolume: (volume) => set({ volume }),
