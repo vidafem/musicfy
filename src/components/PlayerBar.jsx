@@ -15,6 +15,9 @@ export default function PlayerBar() {
   const [showQueue, setShowQueue] = useState(false);
   const idleTimerRef = useRef(null);
 
+  const isMixing = usePlayerStore(state => state.isMixing);
+  const setIsMixing = (val) => usePlayerStore.setState({ isMixing: val });
+  
   const currentSong = usePlayerStore(state => state.currentSong);
   const queue = usePlayerStore(state => state.queue);
   const isPlaying = usePlayerStore(state => state.isPlaying);
@@ -36,6 +39,9 @@ export default function PlayerBar() {
   // Connect State
   const deviceId = usePlayerStore(state => state.deviceId);
   const activeDeviceId = usePlayerStore(state => state.activeDeviceId);
+  const showDeviceModal = usePlayerStore(state => state.showDeviceModal);
+  const toggleDeviceModal = usePlayerStore(state => state.toggleDeviceModal);
+  const broadcastStatus = usePlayerStore(state => state.broadcastStatus);
   const subscribeToRemoteControl = usePlayerStore(state => state.subscribeToRemoteControl);
   const transferPlayback = usePlayerStore(state => state.transferPlayback);
   const syncToCloud = usePlayerStore(state => state.syncToCloud);
@@ -45,8 +51,9 @@ export default function PlayerBar() {
   const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
   const likedSongs = useSettingsStore(state => state.likedSongs);
   const toggleLike = useSettingsStore(state => state.toggleLike);
-  const [isMixing, setIsMixing] = useState(false);
-  const isMixingRef = useRef(false); // Ref para leer en effects sin dependencia
+  const isMixingRef = useRef(false);
+  useEffect(() => { isMixingRef.current = isMixing; }, [isMixing]);
+
   const [activeChannel, setActiveChannel] = useState('A'); // 'A' o 'B'
   const [nextSongInfo, setNextSongInfo] = useState(null);
   const [uiTransition, setUiTransition] = useState(false);
@@ -70,7 +77,10 @@ export default function PlayerBar() {
       const timeLeft = duration - currentTime;
       
       if (timeLeft > 0 && timeLeft <= crossfadeTime) {
-        setIsMixingSync(true);
+        if (!isMixing) {
+          setIsMixing(true);
+          broadcastStatus({ isMixing: true });
+        }
         const secAudio = activeChannel === 'A' ? audioBRef.current : audioARef.current;
 
         if (!nextSongInfo) {
@@ -93,17 +103,24 @@ export default function PlayerBar() {
         if (fadeRatio <= 0.4) setUiTransition(true);
 
         // FINALIZACIÓN: Solo rotamos el canal y avanzamos la canción.
-        // El reseteo visual se hace en el useEffect de currentSong.id
+        // EL ESPEJO NO AVANZA SOLO, ESPERA LA ORDEN DEL MAESTRO
         if (timeLeft <= 0.2) {
-           const savedTime = secAudio.currentTime;
-           const savedDuration = secAudio.duration;
-           setActiveChannel(activeChannel === 'A' ? 'B' : 'A');
-           playNext();
-           // Adelantamos la barra de progreso al tiempo de la canción entrante
-           setCurrentTime(savedTime);
-           setDuration(savedDuration);
+           if (activeDeviceId === deviceId) {
+             const savedTime = secAudio.currentTime;
+             const savedDuration = secAudio.duration;
+             setActiveChannel(activeChannel === 'A' ? 'B' : 'A');
+             playNext();
+             setCurrentTime(savedTime);
+             setDuration(savedDuration);
+             setIsMixing(false);
+             broadcastStatus({ isMixing: false, currentTime: savedTime });
+           }
         }
       } else {
+        if (isMixing) {
+          setIsMixing(false);
+          broadcastStatus({ isMixing: false });
+        }
         mainAudio.volume = volume;
       }
     }
@@ -229,14 +246,25 @@ export default function PlayerBar() {
     }
   }, [user?.id]);
 
-  // Actualizar nube periódicamente (cada 10s si soy el maestro)
+  // Actualizar nube periódicamente (DB) y Broadcast rápido (Cada 2s para sincronía perfecta)
   useEffect(() => {
     if (!isPlaying || activeDeviceId !== deviceId) return;
-    const interval = setInterval(() => {
+    
+    // Pulso rápido de Broadcast (Cada 1s para fluidez total)
+    const broadcastInterval = setInterval(() => {
+      broadcastStatus({ currentTime });
+    }, 1000);
+
+    // Persistencia lenta en DB
+    const dbInterval = setInterval(() => {
       syncToCloud();
     }, 10000);
-    return () => clearInterval(interval);
-  }, [isPlaying, activeDeviceId, deviceId]);
+
+    return () => {
+      clearInterval(broadcastInterval);
+      clearInterval(dbInterval);
+    };
+  }, [isPlaying, activeDeviceId, deviceId, currentTime]);
 
   // SINCRONIZACIÓN DE AUDIO PARA MODO ESPEJO (Asegura letras y progreso)
   useEffect(() => {
@@ -312,6 +340,16 @@ export default function PlayerBar() {
       }
     }
   }, [nextCurrentTime, showLyrics]);
+
+  // Sincronizar UI Transition con el estado de mezcla del store
+  useEffect(() => {
+    if (isMixing) {
+      setUiTransition(true);
+    } else {
+      // Pequeño delay para dejar que la animación de entrada termine
+      setTimeout(() => setUiTransition(false), 500);
+    }
+  }, [isMixing]);
 
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
@@ -529,10 +567,10 @@ export default function PlayerBar() {
               {/* INDICADOR DE CONNECT */}
               <div 
                 className={`connect-indicator ${activeDeviceId === deviceId ? 'active' : ''}`}
-                onClick={transferPlayback}
+                onClick={() => toggleDeviceModal()}
                 title={activeDeviceId === deviceId ? "Sonando en este dispositivo" : "Modo Espejo (Click para sonar aquí)"}
               >
-                {activeDeviceId === deviceId ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                {activeDeviceId === deviceId ? <Monitor size={18} /> : <Smartphone size={18} />}
                 <span>{activeDeviceId === deviceId ? "ACTIVO" : "ESPEJO"}</span>
               </div>
             </div>
@@ -615,6 +653,41 @@ export default function PlayerBar() {
             ))}
           </div>
         </div>
+
+        {/* ==================================
+            MODAL DE SELECCIÓN DE DISPOSITIVO (CONNECT)
+            ================================== */}
+        {showDeviceModal && (
+          <div className="device-modal-overlay" onClick={() => toggleDeviceModal(false)}>
+            <div className="device-modal-content" onClick={e => e.stopPropagation()}>
+              <div className="device-modal-header">
+                <h3>Escuchar en un dispositivo</h3>
+                <button onClick={() => toggleDeviceModal(false)}><X size={20}/></button>
+              </div>
+              <div className="device-list">
+                <div className={`device-item ${activeDeviceId === deviceId ? 'current' : ''}`} onClick={transferPlayback}>
+                  <div className="device-icon">
+                    {window.innerWidth < 768 ? <Smartphone size={24}/> : <Monitor size={24}/>}
+                  </div>
+                  <div className="device-info">
+                    <h4>Este dispositivo</h4>
+                    <p>{activeDeviceId === deviceId ? 'Sonando ahora' : 'Haz clic para reproducir aquí'}</p>
+                  </div>
+                  {activeDeviceId === deviceId && <div className="active-dot"></div>}
+                </div>
+                
+                {/* OTROS DISPOSITIVOS (MOCK - En producción se detectan por Presence) */}
+                <div className="device-item disabled">
+                  <div className="device-icon"><Tv size={24}/></div>
+                  <div className="device-info">
+                    <h4>Musicfy TV / Otros</h4>
+                    <p>Detectando dispositivos en red...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </>

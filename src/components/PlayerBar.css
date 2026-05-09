@@ -846,3 +846,124 @@
   font-size: 0.8rem;
   cursor: pointer;
 }
+
+/* DEVICE SELECTION MODAL */
+.device-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.device-modal-content {
+  background: rgba(20, 20, 20, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1);
+  width: 90%;
+  max-width: 450px;
+  border-radius: 30px;
+  padding: 30px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalPop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.device-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.device-modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  background: linear-gradient(to right, #fff, rgba(255,255,255,0.5));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.device-modal-header button {
+  background: rgba(255,255,255,0.05);
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.device-item:hover:not(.disabled) {
+  background: rgba(0, 255, 255, 0.08);
+  border-color: rgba(0, 255, 255, 0.3);
+  transform: translateX(5px);
+}
+
+.device-item.current {
+  border-color: var(--accent-color);
+  background: rgba(0, 255, 255, 0.05);
+}
+
+.device-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.device-icon {
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  color: var(--accent-color);
+}
+
+.device-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+}
+
+.device-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.5);
+}
+
+.active-dot {
+  position: absolute;
+  right: 25px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent-color);
+}

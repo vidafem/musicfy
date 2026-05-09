@@ -20,8 +20,18 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // Forzamos el uso de la versión compilada para evitar errores de dependencias de Node/Native
       'jsmediatags': 'jsmediatags/dist/jsmediatags.min.js'
+    }
+  },
+  build: {
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-utils': ['lucide-react', 'zustand', '@supabase/supabase-js']
+        }
+      }
     }
   }
 })
