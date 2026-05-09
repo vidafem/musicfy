@@ -327,16 +327,26 @@ export default function PlayerBar() {
         activeLyric.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [localCurrentTime, showLyrics]);
+  }, [currentTime, showLyrics]);
 
   // Scroll automático de letras ENTRANTES (para que al tomar el relevo esté en su sitio)
   const nextLyricsContainerRef = useRef(null);
+  // AUTO-SCROLL DE LETRAS (PRINCIPAL)
+  useEffect(() => {
+    if (showLyrics && lyricsContainerRef.current) {
+      const activeLyric = lyricsContainerRef.current.querySelector('.lyric-line.active');
+      if (activeLyric) {
+        activeLyric.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [localCurrentTime, showLyrics]);
+
+  // AUTO-SCROLL DE LETRAS (ENTRANTE/MIXER)
   useEffect(() => {
     if (showLyrics && nextLyricsContainerRef.current) {
       const activeLyric = nextLyricsContainerRef.current.querySelector('.lyric-line.active');
       if (activeLyric) {
-        // Scroll instantáneo (sin animar) para que esté alineado antes del relevo
-        activeLyric.scrollIntoView({ behavior: 'instant', block: 'center' });
+        activeLyric.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [nextCurrentTime, showLyrics]);

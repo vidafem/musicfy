@@ -27,9 +27,9 @@ export const usePlayerStore = create((set, get) => ({
   onlineDevices: [],
   connectChannel: null,
 
-  // --- LÓGICA DE SINCRONIZACIÓN (CONNECT) ---
+  // --- LÓGICA DE SINCRONIZACIÓN (CONNECT PRO) ---
   
-  // 2. Enviar comandos o estado a los demás (Súper rápido)
+  // 1. Enviar comandos instantáneos
   sendCommand: (command, data = {}) => {
     const { connectChannel, deviceId, activeDeviceId } = get();
     if (!connectChannel || (activeDeviceId && activeDeviceId !== deviceId)) return;
@@ -45,83 +45,67 @@ export const usePlayerStore = create((set, get) => ({
     });
   },
 
+  // 2. Difusión de estado completo (Fuerza bruta para evitar desincronización)
   broadcastState: () => {
     const { currentSong, isPlaying, currentTime } = get();
     get().sendCommand('SYNC_ALL', {
-      songId: currentSong?.id,
+      song: currentSong, // Enviamos el objeto COMPLETO de la canción
       isPlaying,
       currentTime
     });
   },
 
-  // 1.1 Recuperar estado inicial de la nube
+  // 3. Recuperar estado desde la NUBE (Base de datos)
   fetchRemoteState: async (userId) => {
-    if (get().queue.length === 0) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+    if (!userId) return;
     const { data, error } = await supabase
       .from('profiles')
-      .select('last_played_id, is_playing, current_playback_time, active_device_id')
+      .select('last_played_id, is_playing, current_playback_time, active_device_id, settings')
       .eq('id', userId)
       .single();
 
-    if (!error && data && data.last_played_id) {
-      const { queue } = get();
-      const remoteSong = queue.find(s => s.id === data.last_played_id);
-      if (remoteSong) {
-        set({ 
-          currentSong: remoteSong, 
-          isPlaying: data.is_playing, 
-          currentTime: data.current_playback_time,
-          activeDeviceId: data.active_device_id
-        });
+    if (!error && data) {
+      // Sincronizar Ajustes Visuales
+      if (data.settings) {
+        const { useSettingsStore } = await import('./useSettingsStore');
+        useSettingsStore.getState().applyRemoteSettings(data.settings);
+      }
+
+      // Sincronizar Música (Buscamos la canción real por ID)
+      if (data.last_played_id) {
+        const { data: songData } = await supabase.from('songs').select('*').eq('id', data.last_played_id).single();
+        if (songData) {
+          set({ 
+            currentSong: songData, 
+            isPlaying: data.is_playing, 
+            currentTime: data.current_playback_time,
+            activeDeviceId: data.active_device_id
+          });
+        }
       }
     }
   },
 
-  // 2. Suscribirse a cambios de otros dispositivos
-  // 2. Iniciar el canal de comunicación rápida (Connect Pro)
+  // 4. Iniciar Canal Connect Pro
   initConnect: (userId) => {
-    if (!userId) return;
-    if (get().connectChannel) return;
+    if (!userId || get().connectChannel) return;
 
     const channel = supabase.channel(`musicfy_connect_${userId}`, {
-      config: {
-        presence: { key: get().deviceId },
-      },
+      config: { presence: { key: get().deviceId } },
     });
 
     channel
       .on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
-        const devices = Object.values(newState).flat();
-        console.log("[Musicfy Connect] Dispositivos sincronizados:", devices.length);
-        set({ onlineDevices: devices });
+        set({ onlineDevices: Object.values(newState).flat() });
       })
-      // B. Escuchar órdenes de otros dispositivos (Protocolo de Comandos Pro)
-      .on('broadcast', { event: 'player_command' }, ({ payload }) => {
+      .on('broadcast', { event: 'player_command' }, async ({ payload }) => {
         const { command, data, senderId } = payload;
-        const myId = get().deviceId;
-
-        if (senderId !== myId) {
-          console.log(`[Musicfy Connect] Comando recibido de ${senderId}: ${command}`, data);
-          
+        if (senderId !== get().deviceId) {
+          console.log(`[Connect] Comando: ${command}`, data);
           switch (command) {
             case 'PLAY_SONG':
-              const localSong = get().queue.find(s => s.id === data.songId);
-              if (localSong) {
-                set({ currentSong: localSong, isPlaying: true, activeDeviceId: data.activeDeviceId });
-                // FORZAMOS descarga de letras en el ESPEJO
-                if (!localSong.lyrics) get().fetchSongDetails(data.songId);
-              } else {
-                // Si la canción no está en la cola, la buscamos en la DB
-                supabase.from('songs').select('*').eq('id', data.songId).single().then(({ data: remoteSong }) => {
-                  if (remoteSong) {
-                    set({ currentSong: remoteSong, isPlaying: true, activeDeviceId: data.activeDeviceId });
-                    if (!remoteSong.lyrics) get().fetchSongDetails(data.songId);
-                  }
-                });
-              }
+              set({ currentSong: data.song, isPlaying: true, activeDeviceId: data.activeDeviceId });
               break;
             case 'TOGGLE_PLAY':
               set({ isPlaying: data.isPlaying, activeDeviceId: data.activeDeviceId });
@@ -131,70 +115,37 @@ export const usePlayerStore = create((set, get) => ({
               break;
             case 'SYNC_ALL':
               set({ 
-                isPlaying: data.isPlaying,
-                currentTime: data.currentTime,
-                activeDeviceId: data.activeDeviceId
+                isPlaying: data.isPlaying, 
+                currentTime: data.currentTime, 
+                activeDeviceId: data.activeDeviceId 
               });
+              if (data.song && get().currentSong?.id !== data.song.id) {
+                set({ currentSong: data.song });
+              }
               break;
             case 'SYNC_SETTINGS':
-              console.log("[Musicfy Connect] Aplicando nuevos ajustes visuales...", data);
-              import('./useSettingsStore').then(({ useSettingsStore }) => {
-                useSettingsStore.setState({ ...data });
-              });
+              const { useSettingsStore } = await import('./useSettingsStore');
+              useSettingsStore.getState().applyRemoteSettings(data);
               break;
           }
         }
       })
-      .subscribe(async (status) => {
-        console.log(`[Musicfy Connect] Estado de suscripción: ${status}`);
+      .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track({
-            id: get().deviceId,
-            name: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Navegador Web',
-            lastSeen: new Date().toISOString()
-          });
-          
-          // Difundir ajustes iniciales si somos el maestro
-          if (get().activeDeviceId === get().deviceId) {
-            import('./useSettingsStore').then(({ useSettingsStore }) => {
-              const s = useSettingsStore.getState();
-              get().sendCommand('SYNC_SETTINGS', {
-                accentColor: s.accentColor,
-                accentOpacity: s.accentOpacity,
-                animatedCovers: s.animatedCovers,
-                crossfadeEnabled: s.crossfadeEnabled,
-                crossfadeTime: s.crossfadeTime
-              });
-            });
-          }
-          
+          channel.track({ id: get().deviceId, name: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Navegador Web' });
           get().fetchRemoteState(userId);
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.error("[Musicfy Connect] Error crítico en el canal. Reintentando...");
-          setTimeout(() => get().initConnect(userId), 3000);
         }
       });
 
     set({ connectChannel: channel });
-    return () => {
-      supabase.removeChannel(channel);
-      set({ connectChannel: null });
-    };
   },
 
-  // 4. Reclamar el audio
   transferPlayback: () => {
     const myId = get().deviceId;
     set({ activeDeviceId: myId });
     get().broadcastState();
-    
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('profiles').update({ 
-          active_device_id: myId
-        }).eq('id', user.id);
-      }
+      if (user) supabase.from('profiles').update({ active_device_id: myId }).eq('id', user.id);
     });
   },
 

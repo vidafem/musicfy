@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, Sliders, Trash2, LogOut, Disc3, Palette } from 'lucide-react';
+import { X, Settings, Sliders, Trash2, LogOut, Disc3, Palette, RefreshCw } from 'lucide-react';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import GlassButtonWrapper from './ui/GlassButtonWrapper';
@@ -9,17 +9,26 @@ export default function SettingsSidebar({ isOpen, onClose }) {
   // OPTIMIZACIÓN: Selectores específicos para no re-renderizar con el tiempo de la música
   const animatedCovers = useSettingsStore(state => state.animatedCovers);
   const toggleAnimatedCovers = useSettingsStore(state => state.toggleAnimatedCovers);
-  const crossfadeEnabled = useSettingsStore(state => state.crossfadeEnabled);
-  const toggleCrossfade = useSettingsStore(state => state.toggleCrossfade);
-  const crossfadeTime = useSettingsStore(state => state.crossfadeTime);
-  const setCrossfadeTime = useSettingsStore(state => state.setCrossfadeTime);
-  const equalizerEnabled = useSettingsStore(state => state.equalizerEnabled);
-  const toggleEqualizer = useSettingsStore(state => state.toggleEqualizer);
-  const accentColor = useSettingsStore(state => state.accentColor);
-  const setAccentColor = useSettingsStore(state => state.setAccentColor);
-  const accentOpacity = useSettingsStore(state => state.accentOpacity);
-  const setAccentOpacity = useSettingsStore(state => state.setAccentOpacity);
-  const clearCache = useSettingsStore(state => state.clearCache);
+  const { 
+    animatedCovers, toggleAnimatedCovers, 
+    crossfadeEnabled, toggleCrossfade,
+    crossfadeTime, setCrossfadeTime,
+    equalizerEnabled, toggleEqualizer,
+    accentColor, setAccentColor,
+    accentOpacity, setAccentOpacity,
+    saveSettingsToCloud,
+    clearCache 
+  } = useSettingsStore();
+
+  const handleSyncProfile = async () => {
+    await saveSettingsToCloud();
+    // Forzamos un broadcast de los ajustes a otros dispositivos
+    const { usePlayerStore } = await import('../store/usePlayerStore');
+    usePlayerStore.getState().sendCommand('SYNC_SETTINGS', {
+      accentColor, accentOpacity, animatedCovers, crossfadeEnabled, crossfadeTime
+    });
+    alert('¡Perfil Sincronizado en todos tus dispositivos! 🚀');
+  };
   
   const signOut = useAuthStore(state => state.signOut);
   const user = useAuthStore(state => state.user);
@@ -132,6 +141,19 @@ export default function SettingsSidebar({ isOpen, onClose }) {
                  onChange={(e) => setAccentOpacity(parseFloat(e.target.value))}
                  style={{ width: '100%', marginTop: '10px' }}
                />
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h3>Sincronización Cloud</h3>
+            <div className="setting-item action-item" onClick={handleSyncProfile} style={{cursor: 'pointer'}}>
+              <div className="setting-info">
+                <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>
+                  <RefreshCw size={18} style={{verticalAlign: 'middle', marginRight: '8px'}}/> 
+                  Sincronizar Perfil en la Nube
+                </span>
+                <p>Guarda tus colores y ajustes para verlos en todos tus dispositivos.</p>
+              </div>
             </div>
           </div>
 

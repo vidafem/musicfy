@@ -16,12 +16,55 @@ export const useSettingsStore = create(
       accentOpacity: 1,      // Opacidad del sistema
 
       // ACCIONES PARA MODIFICAR ESTADOS
-      toggleAnimatedCovers: () => set((state) => ({ animatedCovers: !state.animatedCovers })),
-      toggleCrossfade: () => set((state) => ({ crossfadeEnabled: !state.crossfadeEnabled })),
-      setCrossfadeTime: (time) => set({ crossfadeTime: Math.min(20, time) }),
-      toggleEqualizer: () => set((state) => ({ equalizerEnabled: !state.equalizerEnabled })),
-      setAccentColor: (color) => set({ accentColor: color }),
-      setAccentOpacity: (opacity) => set({ accentOpacity: opacity }),
+      toggleAnimatedCovers: () => {
+        set((state) => ({ animatedCovers: !state.animatedCovers }));
+        get().saveSettingsToCloud();
+      },
+      toggleCrossfade: () => {
+        set((state) => ({ crossfadeEnabled: !state.crossfadeEnabled }));
+        get().saveSettingsToCloud();
+      },
+      setCrossfadeTime: (time) => {
+        set({ crossfadeTime: Math.min(20, time) });
+        get().saveSettingsToCloud();
+      },
+      toggleEqualizer: () => {
+        set((state) => ({ equalizerEnabled: !state.equalizerEnabled }));
+        get().saveSettingsToCloud();
+      },
+      setAccentColor: (color) => {
+        set({ accentColor: color });
+        get().saveSettingsToCloud();
+      },
+      setAccentOpacity: (opacity) => {
+        set({ accentOpacity: opacity });
+        get().saveSettingsToCloud();
+      },
+
+      // Función para aplicar ajustes recibidos de otro dispositivo
+      applyRemoteSettings: (newSettings) => {
+        set({ ...newSettings });
+      },
+
+      // Guardar en la base de datos de Supabase para persistencia entre sesiones/dispositivos
+      saveSettingsToCloud: async () => {
+        const { supabase } = await import('../supabaseClient');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const currentSettings = {
+          accentColor: get().accentColor,
+          accentOpacity: get().accentOpacity,
+          animatedCovers: get().animatedCovers,
+          crossfadeEnabled: get().crossfadeEnabled,
+          crossfadeTime: get().crossfadeTime
+        };
+
+        await supabase
+          .from('profiles')
+          .update({ settings: currentSettings })
+          .eq('id', user.id);
+      },
 
       // Agregar o quitar una canción de Me Gusta (guarda solo el ID)
       toggleLike: (songId, songData = null) => {
@@ -82,21 +125,14 @@ export const useSettingsStore = create(
 );
 
 // --- SINCRONIZACIÓN AUTOMÁTICA DE AJUSTES ---
+// Escuchamos cualquier cambio en este store y lo enviamos a los demás dispositivos
 useSettingsStore.subscribe((state, prevState) => {
-    // Solo emitimos si algo realmente cambió para evitar bucles
-    const hasChanged = 
-        state.accentColor !== prevState.accentColor ||
-        state.accentOpacity !== prevState.accentOpacity ||
-        state.animatedCovers !== prevState.animatedCovers ||
-        state.crossfadeEnabled !== prevState.crossfadeEnabled ||
-        state.crossfadeTime !== prevState.crossfadeTime;
-
-    if (!hasChanged) return;
-
+    // Importamos dinámicamente para evitar dependencias circulares
     import('./usePlayerStore').then(({ usePlayerStore }) => {
         const sendCommand = usePlayerStore.getState().sendCommand;
         if (sendCommand) {
-            console.log("[Musicfy Connect] Difundiendo nuevos ajustes...");
+            // Solo enviamos si realmente algo cambió y no fue una actualización masiva
+            // Enviamos los campos clave para no saturar
             sendCommand('SYNC_SETTINGS', {
                 accentColor: state.accentColor,
                 accentOpacity: state.accentOpacity,
