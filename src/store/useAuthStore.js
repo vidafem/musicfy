@@ -16,11 +16,11 @@ export const useAuthStore = create((set) => ({
     // Hacemos una consulta a la tabla 'profiles' para saber si es admin
     let isAdmin = false;
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle(); // Usamos maybeSingle para que no lance error si no hay fila
       
       if (profile && profile.role === 'admin') {
         isAdmin = true;
@@ -35,11 +35,11 @@ export const useAuthStore = create((set) => ({
       let currentIsAdmin = false;
       
       if (currentUser) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', currentUser.id)
-          .single();
+          .maybeSingle();
           
         if (profile && profile.role === 'admin') {
           currentIsAdmin = true;
@@ -56,8 +56,14 @@ export const useAuthStore = create((set) => ({
     } catch (error) {
       console.error("Error al cerrar sesión en servidor:", error);
     } finally {
-      // Siempre limpiamos el estado local para forzar la salida
+      // LIMPIEZA TOTAL: Borramos todo rastro local para evitar sesiones fantasma
+      localStorage.clear();
+      sessionStorage.clear();
+      
       set({ user: null, session: null, isAdmin: false });
+      
+      // Forzamos recarga para limpiar estados de otros stores (Settings, Library, etc)
+      window.location.href = '/login';
     }
   }
 }));

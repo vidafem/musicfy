@@ -271,7 +271,14 @@ export default function SettingsSidebar({ isOpen, onClose }) {
                 strength="40"
                 background-color="rgba(255, 0, 0, 0.08)"
                 chromatic-aberration="3">
-                <button onClick={signOut} className="logout-glass-btn" style={{ minWidth: '200px' }}>
+                <button 
+                  onClick={() => {
+                    onClose(); 
+                    signOut();
+                  }} 
+                  className="logout-glass-btn" 
+                  style={{ minWidth: '200px', cursor: 'pointer', zIndex: 100 }}
+                >
                    <LogOut size={20} /> Cerrar Sesión
                 </button>
              </GlassButtonWrapper>

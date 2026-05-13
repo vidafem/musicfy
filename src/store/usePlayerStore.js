@@ -1,18 +1,33 @@
 import { create } from 'zustand';
 import { supabase } from '../supabaseClient';
+import { useSettingsStore } from './useSettingsStore';
 
 // Generamos o recuperamos un ID de dispositivo único (sessionStorage para separar pestañas)
 const getDeviceId = () => {
-  let id = sessionStorage.getItem('musicfy_device_id');
+  let id = localStorage.getItem('musicfy_device_id');
   if (!id) {
-    id = `dev_${crypto.randomUUID().slice(0, 8)}`;
-    sessionStorage.setItem('musicfy_device_id', id);
+    id = `dev_${Math.random().toString(36).substring(2, 10)}`;
+    localStorage.setItem('musicfy_device_id', id);
   }
   return id;
 };
 
+const getDeviceName = () => {
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) {
+    if (/TV|AFT|BRAVIA|SHIELD|SmartTV/i.test(ua)) return 'Android TV';
+    return 'Android';
+  }
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/Macintosh/i.test(ua)) return 'Mac';
+  if (/Windows/i.test(ua)) return 'Windows PC';
+  return 'Navegador Web';
+};
+
 export const usePlayerStore = create((set, get) => ({
   deviceId: getDeviceId(),
+  deviceName: getDeviceName(),
   activeDeviceId: null,
   currentSong: null,
   queue: [],
@@ -20,149 +35,280 @@ export const usePlayerStore = create((set, get) => ({
   volume: 1,
   currentTime: 0,
   duration: 0,
+  playbackUpdatedAt: Date.now(),
+  mixerState: null,
   playbackHistory: [], // Historial real de lo que ha sonado
 
   onlineDevices: [],
   connectChannel: null,
+  isFullScreen: false,
+  showDeviceSelector: false,
+
+  setIsFullScreen: (val) => set({ isFullScreen: val }),
+  setShowDeviceSelector: (val) => set({ showDeviceSelector: val }),
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT PRO) ---
-  
+
   // 1. Enviar comandos instantáneos (Cualquier dispositivo puede mandar órdenes)
-  sendCommand: (command, data = {}) => {
+  sendCommand: (command, data = {}, targetDeviceId = null) => {
     const { connectChannel, deviceId, activeDeviceId } = get();
     if (!connectChannel) return;
+
+    const payload = {
+      commandId: Math.random().toString(36).substring(2, 15),
+      senderId: deviceId,
+      targetDeviceId, // Si es null, lo reciben todos
+      sentAt: Date.now(),
+      command,
+      data: { ...data, activeDeviceId: activeDeviceId || deviceId }
+    };
 
     connectChannel.send({
       type: 'broadcast',
       event: 'player_command',
-      payload: {
-        senderId: deviceId,
-        command,
-        data: { ...data, activeDeviceId: activeDeviceId || deviceId }
-      }
+      payload
     });
+  },
+
+  saveRemotePlaybackState: async () => {
+    const { currentSong, isPlaying, currentTime, activeDeviceId } = get();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase
+      .from('profiles')
+      .update({
+        last_played_id: currentSong?.id || null,
+        is_playing: isPlaying,
+        current_playback_time: currentTime || 0,
+        active_device_id: activeDeviceId
+      })
+      .eq('id', user.id);
   },
 
   // 2. Difusión de estado completo (Fuerza bruta para evitar desincronización)
   broadcastState: () => {
-    const { currentSong, isPlaying, currentTime } = get();
+    const { currentSong, isPlaying, currentTime, duration, activeDeviceId, mixerState } = get();
+    const updatedAt = Date.now();
     get().sendCommand('SYNC_ALL', {
       song: currentSong, // Enviamos el objeto COMPLETO de la canción
       isPlaying,
-      currentTime
+      currentTime,
+      duration,
+      activeDeviceId,
+      mixerState,
+      updatedAt
     });
+    set({ playbackUpdatedAt: updatedAt });
+  },
+
+  setMixerState: (mixerState, shouldBroadcast = true) => {
+    set({ mixerState });
+    if (shouldBroadcast) {
+      get().sendCommand('MIXER_STATE', mixerState);
+    }
+  },
+
+  clearMixerState: (shouldBroadcast = true) => {
+    set({ mixerState: null });
+    if (shouldBroadcast) {
+      get().sendCommand('MIXER_STATE', null);
+    }
   },
 
   // 3. Recuperar estado desde la NUBE (Base de datos)
   fetchRemoteState: async (userId) => {
     if (!userId) return;
     console.log("[Connect] Recuperando ajustes de la nube para el usuario:", userId);
-    
+
     const { data, error } = await supabase
       .from('profiles')
       .select('last_played_id, is_playing, current_playback_time, active_device_id, settings')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
-      // Sincronizar Ajustes Visuales (Prioridad Nube)
+      // Sincronizar Ajustes Visuales
       if (data.settings) {
-        console.log("[Connect] Aplicando ajustes remotos:", data.settings);
         const { useSettingsStore } = await import('./useSettingsStore');
         useSettingsStore.getState().applyRemoteSettings(data.settings);
       }
 
       // Sincronizar Música
       if (data.last_played_id) {
-        const { data: songData } = await supabase.from('songs').select('*').eq('id', data.last_played_id).single();
+        const { data: songData } = await supabase.from('songs').select('*').eq('id', data.last_played_id).maybeSingle();
         if (songData) {
-          set({ 
-            currentSong: songData, 
-            isPlaying: data.is_playing, 
+          set({
+            currentSong: songData,
+            isPlaying: data.is_playing,
             currentTime: data.current_playback_time,
-            activeDeviceId: data.active_device_id
+            activeDeviceId: data.active_device_id,
+            playbackUpdatedAt: Date.now()
           });
         }
       }
-    } else if (error) {
-      console.error("[Connect] Error al recuperar estado remoto:", error);
+    } else {
+      console.log("[Connect] No se encontró perfil previo o error leve. Iniciando estado limpio.");
     }
   },
 
   // 4. Iniciar Canal Connect Pro
   initConnect: (userId) => {
-    if (!userId || get().connectChannel) return;
+    if (!userId) return;
+    const { connectChannel, deviceId, deviceName } = get();
+
+    // Si ya existe un canal, no creamos otro pero nos aseguramos de estar trackeados
+    if (connectChannel) return;
+
+    console.log("[Connect] 🔌 Inicializando conexión para usuario:", userId);
 
     const channel = supabase.channel(`musicfy_connect_${userId}`, {
-      config: { presence: { key: get().deviceId } },
+      config: { presence: { key: deviceId } },
     });
+
+    const handledCommands = new Set();
 
     channel
       .on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
-        set({ onlineDevices: Object.values(newState).flat() });
+        const devices = Object.values(newState).flat();
+        // Deduplicar por ID para evitar errores de llaves duplicadas en React
+        const uniqueDevices = Array.from(new Map(devices.map(d => [d.id, d])).values());
+        set({ onlineDevices: uniqueDevices });
       })
       .on('broadcast', { event: 'player_command' }, async ({ payload }) => {
-        const { command, data, senderId } = payload;
-        if (senderId !== get().deviceId) {
-          console.log(`[Connect] Comando: ${command}`, data);
-          switch (command) {
-            case 'PLAY_SONG':
-              set({ currentSong: data.song, isPlaying: true, activeDeviceId: data.activeDeviceId });
-              break;
-            case 'TOGGLE_PLAY':
-              set({ isPlaying: data.isPlaying, activeDeviceId: data.activeDeviceId });
-              break;
-            case 'SEEK':
-              set({ currentTime: data.time });
-              break;
-            case 'SYNC_ALL':
-              set({ 
-                isPlaying: data.isPlaying, 
-                currentTime: data.currentTime, 
-                activeDeviceId: data.activeDeviceId 
-              });
-              if (data.song) {
-                // Actualizamos siempre para asegurar que tenemos las letras más recientes
-                set({ currentSong: data.song });
-              }
-              break;
-            case 'SYNC_SETTINGS':
+        const { command, data, senderId, targetDeviceId, commandId } = payload;
+
+        // 1. Evitar duplicados por ID de comando
+        if (commandId) {
+          if (handledCommands.has(commandId)) return;
+          handledCommands.add(commandId);
+          if (handledCommands.size > 200) handledCommands.clear();
+        }
+
+        // 2. Filtrar por destinatario (si existe)
+        if (targetDeviceId && targetDeviceId !== deviceId) return;
+
+        // 3. Ignorar comandos propios
+        if (senderId === deviceId) return;
+
+        console.log(`[Connect] 📥 Recibido ${command} de ${senderId}`, data);
+
+        switch (command) {
+          case 'TRANSFER_PLAYBACK':
+            set({
+              activeDeviceId: data.activeDeviceId,
+              currentSong: data.song || get().currentSong,
+              isPlaying: data.isPlaying ?? get().isPlaying,
+              currentTime: data.currentTime ?? get().currentTime,
+              duration: data.duration ?? get().duration,
+              playbackUpdatedAt: data.updatedAt || Date.now()
+            });
+            // Si el comando fue para nosotros, el useEffect de PlayerBar se encargará del resto
+            get().saveRemotePlaybackState();
+            break;
+          case 'PLAY_SONG':
+            set({
+              currentSong: data.song,
+              isPlaying: true,
+              currentTime: 0,
+              activeDeviceId: data.activeDeviceId,
+              playbackUpdatedAt: data.updatedAt || Date.now()
+            });
+            break;
+          case 'TOGGLE_PLAY':
+            set({ isPlaying: data.isPlaying, activeDeviceId: data.activeDeviceId, playbackUpdatedAt: data.updatedAt || Date.now() });
+            break;
+          case 'SEEK':
+            set({ currentTime: data.time, playbackUpdatedAt: data.updatedAt || Date.now() });
+            break;
+          case 'MIXER_STATE':
+            set({ mixerState: data || null });
+            break;
+          case 'SYNC_ALL':
+            set({
+              isPlaying: data.isPlaying,
+              currentTime: data.currentTime,
+              duration: data.duration || get().duration,
+              activeDeviceId: data.activeDeviceId,
+              mixerState: data.mixerState || null,
+              playbackUpdatedAt: data.updatedAt || Date.now()
+            });
+            if (data.song) set({ currentSong: data.song });
+            break;
+          case 'SYNC_SETTINGS':
+            {
               const { useSettingsStore } = await import('./useSettingsStore');
               useSettingsStore.getState().applyRemoteSettings(data);
-              break;
-          }
+            }
+            break;
+          case 'SET_VOLUME':
+            set({ volume: data.volume });
+            break;
+          default:
+            break;
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          channel.track({ id: get().deviceId, name: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Navegador Web' });
+          console.log("[Connect] ✅ Subscrito al canal");
+          channel.track({ id: deviceId, name: deviceName, lastSeenAt: Date.now() });
           get().fetchRemoteState(userId);
         }
       });
 
     set({ connectChannel: channel });
+
+    // Devolvemos la función de limpieza para useEffect
+    return () => {
+      console.log("[Connect] 🔌 Cerrando canal...");
+      supabase.removeChannel(channel);
+      set({ connectChannel: null, onlineDevices: [] });
+    };
   },
 
-  transferPlayback: () => {
+  transferPlayback: (targetDeviceId = null) => {
     const myId = get().deviceId;
-    set({ activeDeviceId: myId });
-    get().broadcastState();
+    const nextActiveDeviceId = targetDeviceId || myId;
+    const { currentSong, isPlaying, currentTime, duration } = get();
+    const updatedAt = Date.now();
+
+    set({ activeDeviceId: nextActiveDeviceId, playbackUpdatedAt: updatedAt });
+    get().sendCommand('TRANSFER_PLAYBACK', {
+      activeDeviceId: nextActiveDeviceId,
+      song: currentSong,
+      isPlaying,
+      currentTime,
+      duration,
+      updatedAt
+    }, targetDeviceId);
+
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) supabase.from('profiles').update({ active_device_id: myId }).eq('id', user.id);
+      if (user) supabase.from('profiles').update({ active_device_id: nextActiveDeviceId }).eq('id', user.id);
     });
   },
 
   fetchSongs: async () => {
-    // OPTIMIZACIÓN: Solo traemos las últimas 50 para no saturar memoria
+    // 1. Carga inicial desde caché local (Carga instantánea)
+    const cachedQueue = localStorage.getItem('musicfy_cached_queue');
+    if (cachedQueue) {
+      const parsed = JSON.parse(cachedQueue);
+      if (parsed.length > 0) {
+        set({ queue: parsed, currentSong: get().currentSong || parsed[0] });
+      }
+    }
+
+    // 2. Sincronización con el servidor
     const { data, error } = await supabase
       .from('songs')
-      .select('id, title, artist, cover_url, url, created_at')
+      .select('id, title, artist, cover_url, url, created_at, lyrics, background_url, duration')
       .order('created_at', { ascending: false })
       .limit(50);
-    
+
     if (!error && data.length > 0) {
       set({ queue: data, currentSong: get().currentSong || data[0] });
+      // Guardar en caché para la próxima vez
+      localStorage.setItem('musicfy_cached_queue', JSON.stringify(data));
     }
   },
 
@@ -173,7 +319,7 @@ export const usePlayerStore = create((set, get) => ({
       .select('lyrics, background_url')
       .eq('id', songId)
       .single();
-    
+
     if (!error && data) {
       set((state) => ({
         queue: state.queue.map(s => s.id === songId ? { ...s, ...data } : s),
@@ -181,65 +327,92 @@ export const usePlayerStore = create((set, get) => ({
       }));
       // Sincronizar estado completo (incluyendo letras) con los espejos
       get().broadcastState();
+      get().saveRemotePlaybackState();
     }
   },
 
-  playSong: (song) => {
-    const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback } = get();
+  playSong: async (song) => {
+    const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback, queue } = get();
+
+    // LÓGICA DE CACHÉ INTELIGENTE
+    const { CacheManager } = await import('../utils/cacheManager');
+    const playableUrl = await CacheManager.getOrCacheSong(song);
     
-    // LÓGICA ESTRICTA: 
-    // Si no hay nadie activo O el sistema está en pausa total, tomamos el control para sonar aquí.
-    // Pero si alguien YA está sonando (isPlaying: true), no robamos el audio, solo cambiamos la canción remotamente.
+    // Pre-cachear la siguiente canción para que no haya saltos
+    const currentIndex = queue.findIndex(s => s.id === song.id);
+    if (currentIndex !== -1 && currentIndex < queue.length - 1) {
+      CacheManager.cacheSong(queue[currentIndex + 1].url);
+    }
+
     if (!activeDeviceId || !isPlaying) {
       if (activeDeviceId !== deviceId) {
         console.log("[Connect] ⚡ Sistema libre detectado. Tomando el control...");
         transferPlayback();
       }
-    } else {
-      console.log(`[Remote] 🕹️ Actuando como mando: Cambiando canción en el dispositivo maestro (${activeDeviceId})`);
     }
 
-    // Si ya hay una canción sonando, la guardamos en el historial antes de cambiar
     if (currentSong && currentSong.id !== song.id) {
       set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) });
     }
 
-    set({ currentSong: song, isPlaying: true });
+    const updatedAt = Date.now();
+    // Usamos el playableUrl (que puede ser un blob local)
+    set({ 
+      currentSong: { ...song, url: playableUrl }, 
+      isPlaying: true, 
+      currentTime: 0, 
+      playbackUpdatedAt: updatedAt 
+    });
+
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().sendCommand('PLAY_SONG', { song });
+    get().sendCommand('PLAY_SONG', { song, updatedAt });
+    get().saveRemotePlaybackState();
+    
+    // Mantenimiento de caché
+    CacheManager.cleanOldCache(30);
   },
 
   togglePlay: () => {
     const { isPlaying, activeDeviceId, transferPlayback, sendCommand } = get();
     const newState = !isPlaying;
-    
+
     // Si vamos a poner PLAY y no hay nadie activo, tomamos el control
     if (newState && !activeDeviceId) {
       console.log("[Connect] ⚡ Reclamando audio al pulsar Play...");
       transferPlayback();
     }
 
-    set({ isPlaying: newState });
-    sendCommand('TOGGLE_PLAY', { isPlaying: newState });
+    const updatedAt = Date.now();
+    set({ isPlaying: newState, playbackUpdatedAt: updatedAt });
+    sendCommand('TOGGLE_PLAY', { isPlaying: newState, updatedAt });
+    get().saveRemotePlaybackState();
   },
 
-  setVolume: (volume) => set({ volume }),
-  
+  setVolume: (volume) => {
+    set({ volume });
+    get().sendCommand('SET_VOLUME', { volume });
+  },
+
   setCurrentTime: (time, fromUI = false) => {
-    set({ currentTime: time });
-    if (fromUI) get().sendCommand('SEEK', { time });
+    if (fromUI) {
+      const updatedAt = Date.now();
+      set({ currentTime: time, playbackUpdatedAt: updatedAt });
+      get().sendCommand('SEEK', { time, updatedAt });
+      get().saveRemotePlaybackState();
+    } else {
+      set({ currentTime: time });
+    }
   },
 
   setDuration: (duration) => set({ duration }),
   setQueue: (songs) => set({ queue: songs }),
 
   toggleShuffle: () => {
-    const { useSettingsStore } = require('./useSettingsStore');
     const settings = useSettingsStore.getState();
     const nextShuffle = !settings.isShuffled;
-    
+
     let newQueue = [...get().queue];
-    
+
     if (nextShuffle) {
       // Algoritmo Fisher-Yates para mezclar la cola físicamente
       for (let i = newQueue.length - 1; i > 0; i--) {
@@ -249,13 +422,12 @@ export const usePlayerStore = create((set, get) => ({
     } else {
       newQueue.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
-    
+
     set({ queue: newQueue });
     settings.setShuffle(nextShuffle);
   },
 
   toggleRepeat: () => {
-    const { useSettingsStore } = require('./useSettingsStore');
     const settings = useSettingsStore.getState();
     const next = { none: 'one', one: 'all', all: 'none' };
     settings.setRepeatMode(next[settings.repeatMode]);
@@ -263,9 +435,8 @@ export const usePlayerStore = create((set, get) => ({
 
   playNext: () => {
     const { currentSong, queue, playbackHistory } = get();
-    const { useSettingsStore } = require('./useSettingsStore');
     const { repeatMode } = useSettingsStore.getState();
-    
+
     if (!currentSong || queue.length === 0) return;
 
     // Guardar en historial antes de avanzar
@@ -283,19 +454,27 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     if (nextSong) {
-      set({ currentSong: nextSong, isPlaying: true });
+      const updatedAt = Date.now();
+      set({
+        currentSong: nextSong,
+        isPlaying: true,
+        currentTime: 0, // Reset estricto
+        playbackUpdatedAt: updatedAt
+      });
       if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
-      get().sendCommand('PLAY_SONG', { song: nextSong });
+      get().sendCommand('PLAY_SONG', { song: nextSong, updatedAt });
+      get().saveRemotePlaybackState();
     }
   },
 
   playPrevious: () => {
-    const { currentSong, playbackHistory, currentTime } = get();
-    
+    const { playbackHistory, currentTime } = get();
+
     // 1. Si la canción lleva más de 3 segundos, solo reiniciamos el tiempo
     if (currentTime > 3) {
-      set({ currentTime: 0 });
-      get().sendCommand('SEEK', { time: 0 });
+      const updatedAt = Date.now();
+      set({ currentTime: 0, playbackUpdatedAt: updatedAt });
+      get().sendCommand('SEEK', { time: 0, updatedAt });
       console.log("[Player] ⏮️ Reiniciando canción actual.");
       return;
     }
@@ -304,20 +483,23 @@ export const usePlayerStore = create((set, get) => ({
     if (playbackHistory.length > 0) {
       const newHistory = [...playbackHistory];
       const prevSong = newHistory.pop();
-      
-      set({ 
-        currentSong: prevSong, 
-        isPlaying: true, 
-        playbackHistory: newHistory 
+
+      set({
+        currentSong: prevSong,
+        isPlaying: true,
+        playbackHistory: newHistory,
+        playbackUpdatedAt: Date.now()
       });
-      
+
       if (!prevSong.lyrics) get().fetchSongDetails(prevSong.id);
-      get().sendCommand('PLAY_SONG', { song: prevSong });
+      get().sendCommand('PLAY_SONG', { song: prevSong, updatedAt: Date.now() });
+      get().saveRemotePlaybackState();
       console.log("[Player] ⏪ Retrocediendo a:", prevSong.title);
     } else {
       // Si no hay historial, solo reiniciamos
-      set({ currentTime: 0 });
-      get().sendCommand('SEEK', { time: 0 });
+      const updatedAt = Date.now();
+      set({ currentTime: 0, playbackUpdatedAt: updatedAt });
+      get().sendCommand('SEEK', { time: 0, updatedAt });
     }
   }
 }));

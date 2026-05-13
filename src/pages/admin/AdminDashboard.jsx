@@ -47,9 +47,9 @@ export default function AdminDashboard() {
 
     // 2. Check Worker (Spotify Proxy)
     try {
-      // Usamos un timeout corto y validamos que el servidor responda cualquier cosa (incluso 404 es vida)
-      const res = await fetch('https://musicfy.canonedu17.workers.dev', { method: 'GET', cache: 'no-store' });
-      const isUp = res.status < 500; // Si es 404, 403 o 200, el servidor está respondiendo.
+      // Apuntamos a /auth que es un endpoint válido para verificar vida
+      const res = await fetch('https://musicfy.canonedu17.workers.dev/auth', { method: 'GET', cache: 'no-store' });
+      const isUp = res.status < 500; 
       setSystemStatus(prev => ({ ...prev, worker: isUp ? 'online' : 'offline', r2: isUp ? 'online' : 'offline' }));
     } catch (e) { 
       setSystemStatus(prev => ({ ...prev, worker: 'offline', r2: 'offline' })); 

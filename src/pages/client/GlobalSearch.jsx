@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Globe, Play, Heart, Loader2, Music } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSettingsStore } from '../../store/useSettingsStore';
+import { useLibraryStore } from '../../store/useLibraryStore';
 import './GlobalSearch.css';
 
 /**
@@ -17,7 +17,7 @@ export default function GlobalSearch() {
   const [searched, setSearched] = useState(false);
 
   const { playSong, currentSong, isPlaying, togglePlay } = usePlayerStore();
-  const { likedSongs, toggleLike } = useSettingsStore();
+  const { likedSongs, toggleLike } = useLibraryStore();
 
   const handleSearch = async (e) => {
     e.preventDefault();

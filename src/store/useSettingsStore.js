@@ -28,7 +28,9 @@ export const useSettingsStore = create(
         get().saveSettingsToCloud();
       },
       setCrossfadeTime: (time) => {
-        set({ crossfadeTime: Math.min(20, time) });
+        const parsed = Number(time);
+        const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(20, parsed)) : 10;
+        set({ crossfadeTime: safe });
         get().saveSettingsToCloud();
       },
       toggleEqualizer: () => {
@@ -61,7 +63,13 @@ export const useSettingsStore = create(
       // Función para aplicar ajustes recibidos de otro dispositivo
       applyRemoteSettings: (newSettings) => {
         window._isRemoteSettingsUpdate = true;
-        set({ ...newSettings });
+        const safeSettings = {
+          ...newSettings,
+          crossfadeTime: Number.isFinite(Number(newSettings?.crossfadeTime))
+            ? Math.max(1, Math.min(20, Number(newSettings.crossfadeTime)))
+            : get().crossfadeTime
+        };
+        set({ ...safeSettings });
         // Liberamos la bandera después de un breve momento para permitir cambios locales
         setTimeout(() => { window._isRemoteSettingsUpdate = false; }, 100);
       },
@@ -91,20 +99,11 @@ export const useSettingsStore = create(
       },
 
       // Agregar o quitar una canción de Me Gusta (guarda solo el ID)
-      toggleLike: (songId, songData = null) => {
-        const { likedSongs, addExternalSong } = get();
-        const already = likedSongs.includes(songId);
-        
-        // Si es una canción externa (YouTube) y no la tenemos, la guardamos en la DB primero
-        if (!already && songData?.is_external) {
-            addExternalSong(songData);
-        }
-
-        set({
-          likedSongs: already
-            ? likedSongs.filter(id => id !== songId)
-            : [...likedSongs, songId]
-        });
+      toggleLike: async (songId, songData = null) => {
+        const { useLibraryStore } = await import('./useLibraryStore');
+        const song = songData || { id: songId };
+        await useLibraryStore.getState().toggleLike(song);
+        // El estado likedSongs en este store se actualiza desde useLibraryStore
       },
 
       // Persistir metadata de YouTube en Supabase

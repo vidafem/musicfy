@@ -1,8 +1,9 @@
 import React from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut, UploadCloud, Layers, Menu, X as CloseIcon } from 'lucide-react';
+import { LayoutDashboard, Music, Users, ImagePlay, Settings, LogOut, UploadCloud, Menu, X as CloseIcon } from 'lucide-react';
 import MusicManager from '../pages/admin/MusicManager';
+import BulkUploadManager from '../pages/admin/BulkUploadManager';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import MediaLibrary from '../pages/admin/MediaLibrary';
 import UserManager from '../pages/admin/UserManager';
@@ -20,6 +21,7 @@ export default function AdminLayout() {
     const path = location.pathname;
     if (path === '/admin') return 'Dashboard';
     if (path.includes('/admin/music')) return 'Librería & IA';
+    if (path.includes('/admin/bulk')) return 'Subida masiva';
     if (path.includes('/admin/media')) return 'Media';
     if (path.includes('/admin/users')) return 'Usuarios';
     if (path.includes('/admin/settings')) return 'Ajustes';
@@ -48,6 +50,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/music" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Librería Musical">
             <Music size={20} /> {!isSidebarCollapsed && <span>Librería Musical</span>}
+          </NavLink>
+          <NavLink to="/admin/bulk" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Subida masiva">
+            <UploadCloud size={20} /> {!isSidebarCollapsed && <span>Subida masiva</span>}
           </NavLink>
           <NavLink to="/admin/media" onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} title="Media & Fondos">
             <ImagePlay size={20} /> {!isSidebarCollapsed && <span>Media & Fondos</span>}
@@ -98,6 +103,7 @@ export default function AdminLayout() {
           <Routes>
             <Route path="/" element={<AdminDashboard />} />
             <Route path="/music" element={<MusicManager />} />
+            <Route path="/bulk" element={<BulkUploadManager />} />
             <Route path="/media" element={<MediaLibrary />} />
             <Route path="/users" element={<UserManager />} />
             <Route path="/settings" element={<div style={{ padding: '20px' }}>Configuración (Próximamente)</div>} />

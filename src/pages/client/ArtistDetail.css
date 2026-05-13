@@ -1,0 +1,358 @@
+.artist-detail-container {
+    background: #121212;
+    min-height: 100vh;
+    color: white;
+    padding-bottom: 150px;
+    position: relative;
+}
+
+/* Fixed Header */
+.artist-fixed-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    z-index: 1000;
+    transition: background-color 0.3s ease;
+}
+
+.back-circle {
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.header-name {
+    margin-left: 20px;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+/* Hero Section - The "Soul" of the profile */
+.artist-premium-hero {
+    position: relative;
+    height: 42vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0 20px 25px 20px;
+    overflow: hidden;
+}
+
+.hero-visuals {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.main-artist-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 25%;
+}
+
+.hero-gradient-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0) 0%,
+        rgba(0,0,0,0.2) 40%,
+        rgba(18, 18, 18, 1) 100%
+    );
+}
+
+.hero-text-content {
+    position: relative;
+    z-index: 10;
+}
+
+.verified-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.artist-giant-title {
+    font-size: clamp(3rem, 10vw, 6rem);
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -2px;
+    line-height: 1.1;
+    text-shadow: 0 5px 20px rgba(0,0,0,0.5);
+}
+
+.monthly-stats {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 15px;
+    opacity: 0.9;
+}
+
+/* Sub Nav Tabs */
+.artist-sub-nav {
+    display: flex;
+    padding: 0 20px;
+    gap: 25px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: 25px;
+}
+
+.sub-nav-item {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    padding: 12px 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.3s;
+}
+
+.sub-nav-item.active {
+    color: white;
+}
+
+.active-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent-color, #1db954);
+    border-radius: 2px;
+}
+
+/* Actions Bar */
+.artist-main-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    margin-bottom: 30px;
+}
+
+.left-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.spotify-play-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent-color, #1db954);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+    box-shadow: 0 8px 15px rgba(29, 185, 84, 0.3);
+}
+
+.spotify-play-btn:active { transform: scale(0.95); }
+
+.spotify-shuffle-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+}
+
+.spotify-follow-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.4);
+    color: white;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.more-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+}
+
+/* Body Content */
+.artist-body-content {
+    padding: 0 20px;
+}
+
+.content-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-bottom: 20px;
+}
+
+/* Popular Row */
+.spotify-song-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    gap: 15px;
+    cursor: pointer;
+}
+
+.song-rank {
+    width: 20px;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+}
+
+.song-small-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.song-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.song-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.song-name.active { color: var(--accent-color); }
+
+.song-plays-count {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.5);
+    margin-top: 2px;
+}
+
+.song-end-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.row-like-btn, .row-more {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+}
+
+.show-more-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-top: 15px;
+    cursor: pointer;
+}
+
+/* Releases Grid */
+.releases-section {
+    margin-top: 40px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.show-all {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.releases-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.release-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.release-card img {
+    width: 100%;
+    aspect-ratio: 1/1;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+
+.release-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.release-year {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.5);
+}
+
+/* Loading */
+.artist-loading-screen {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #121212;
+}
+
+.loader-orbit {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent-color, #1db954);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (min-width: 769px) {
+    .artist-premium-hero { height: 50vh; padding: 0 50px 40px 50px; }
+    .artist-giant-title { font-size: 8vw; }
+    .artist-body-content, .artist-main-actions, .artist-sub-nav { padding: 0 50px; }
+    .releases-grid { grid-template-columns: repeat(4, 1fr); }
+}

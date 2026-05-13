@@ -1,0 +1,696 @@
+/* ==========================================
+   HOME PAGE - ESTILO SPOTIFY MODERNO
+   ========================================== */
+
+.home-page {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Fondo dinámico con overlay */
+.home-hero-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.home-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.4) 40%,
+    rgba(0, 0, 0, 0.8) 80%,
+    #000 100%
+  );
+  backdrop-filter: blur(2px);
+}
+
+/* Contenido scrollable */
+.home-content-scroll {
+  position: relative;
+  z-index: 10;
+  padding: 120px 40px 100px 40px;
+  overflow-y: auto;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.4) 40%, #000 100%);
+}
+
+/* ==========================================
+   SECCIÓN HERO: CANCIÓN ACTUAL
+   ========================================== */
+.home-hero-section {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 80px;
+  animation: slideInUp 0.6s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-hero-content {
+  display: flex;
+  gap: 40px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.home-hero-cover {
+  position: relative;
+  width: 250px;
+  height: 250px;
+  flex-shrink: 0;
+  animation: scaleIn 0.8s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.home-hero-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.home-hero-play-btn {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 255, 255, 0.4);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.home-hero-play-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 32px rgba(0, 255, 255, 0.6);
+}
+
+.home-hero-info {
+  flex: 1;
+  animation: slideInLeft 0.6s ease-out 0.2s backwards;
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.home-label {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  margin-bottom: 15px;
+}
+
+.home-current-title {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 900;
+  margin: 10px 0;
+  line-height: 1.1;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+}
+
+.home-current-artist {
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 25px;
+}
+
+.home-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 24px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.home-like-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.home-like-btn.liked {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #000;
+}
+
+/* ==========================================
+   SECCIONES PRINCIPALES
+   ========================================== */
+.home-section {
+  margin-bottom: 60px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.home-section-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 25px;
+  color: white;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* ==========================================
+   ARTISTAS GRID
+   ========================================== */
+.home-artists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.home-artist-card {
+  cursor: pointer;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.home-artist-card:hover {
+  transform: translateY(-8px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.home-artist-visual {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.home-artist-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.home-artist-card:hover .home-artist-cover {
+  transform: scale(1.08);
+}
+
+.home-artist-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 255, 0.2) 0%,
+    rgba(255, 0, 255, 0.1) 100%
+  );
+}
+
+.home-artist-name-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-color), #764ba2);
+  color: white;
+  text-align: center;
+  padding: 20px;
+}
+
+.home-artist-name-display h3 {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 5px;
+  line-height: 1.2;
+}
+
+.home-artist-name-display span {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.home-artist-footer {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.home-artist-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================
+   CARRUSEL DE CANCIONES
+   ========================================== */
+.home-songs-carousel {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scroll-behavior: smooth;
+}
+
+.home-songs-carousel::-webkit-scrollbar {
+  height: 6px;
+}
+
+.home-songs-carousel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.home-songs-carousel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.home-songs-carousel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.home-song-card {
+  flex: 0 0 150px;
+  cursor: pointer;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.home-song-card:hover {
+  transform: translateY(-6px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.home-song-card.active {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.home-song-cover-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.home-song-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.home-song-card:hover .home-song-cover {
+  transform: scale(1.08);
+}
+
+.home-song-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.home-song-card:hover .home-song-play-overlay {
+  opacity: 1;
+}
+
+.home-mini-bars {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+}
+
+.home-mini-bars span {
+  width: 3px;
+  background: var(--accent-color);
+  border-radius: 2px;
+  animation: barPulse 0.6s ease-in-out infinite;
+}
+
+.home-mini-bars span:nth-child(1) {
+  height: 8px;
+  animation-delay: 0s;
+}
+
+.home-mini-bars span:nth-child(2) {
+  height: 12px;
+  animation-delay: 0.2s;
+}
+
+.home-mini-bars span:nth-child(3) {
+  height: 8px;
+  animation-delay: 0.4s;
+}
+
+@keyframes barPulse {
+  0%, 100% {
+    height: 8px;
+  }
+  50% {
+    height: 12px;
+  }
+}
+
+.home-song-info {
+  padding: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-song-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.home-song-artist {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================
+   LISTA DE FAVORITOS
+   ========================================== */
+.home-songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.home-list-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.home-list-item.active {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: var(--accent-color);
+}
+
+.home-list-index {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  min-width: 24px;
+}
+
+.home-list-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.home-list-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-list-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-list-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.home-list-artist {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-list-like {
+  padding: 8px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.home-list-like:hover {
+  color: white;
+}
+
+.home-list-like.liked {
+  color: var(--accent-color);
+}
+
+/* ==========================================
+   ESTADO VACÍO
+   ========================================== */
+.home-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+
+.home-empty-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.home-empty-state h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.home-empty-state p {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ==========================================
+   RESPONSIVE
+   ========================================== */
+@media (max-width: 1024px) {
+  .home-content-scroll {
+    padding: 100px 30px 100px 30px;
+  }
+
+  .home-hero-content {
+    flex-direction: column;
+    gap: 30px;
+    align-items: center;
+  }
+
+  .home-hero-cover {
+    width: 200px;
+    height: 200px;
+  }
+
+  .home-hero-info {
+    text-align: center;
+  }
+
+  .home-current-title {
+    font-size: 2.5rem;
+  }
+
+  .home-artists-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .home-content-scroll {
+    padding: 90px 20px 100px 20px;
+  }
+
+  .home-hero-section {
+    margin-bottom: 50px;
+  }
+
+  .home-hero-cover {
+    width: 150px;
+    height: 150px;
+  }
+
+  .home-current-title {
+    font-size: 1.8rem;
+  }
+
+  .home-current-artist {
+    font-size: 1rem;
+  }
+
+  .home-section-title {
+    font-size: 1.4rem;
+  }
+
+  .home-artists-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+  }
+
+  .home-song-card {
+    flex: 0 0 130px;
+  }
+
+  .home-songs-carousel {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-content-scroll {
+    padding: 80px 16px 100px 16px;
+  }
+
+  .home-hero-cover {
+    width: 120px;
+    height: 120px;
+  }
+
+  .home-current-title {
+    font-size: 1.5rem;
+  }
+
+  .home-section-title {
+    font-size: 1.2rem;
+  }
+
+  .home-artists-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .home-song-card {
+    flex: 0 0 110px;
+  }
+
+  .home-songs-carousel {
+    gap: 10px;
+  }
+}
