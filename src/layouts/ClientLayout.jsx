@@ -13,7 +13,40 @@ import PlaylistDetailPage from '../pages/client/PlaylistDetail';
 import GlobalSearch from '../pages/client/GlobalSearch';
 import SearchPage from '../pages/client/Search';
 import ArtistDetailPage from '../pages/client/ArtistDetail';
+import { useOfflineStore } from '../store/useOfflineStore';
 import './ClientLayout.css';
+
+// Componente para animar textos largos tipo teleprompter
+function ScrollingText({ text, className }) {
+  const containerRef = React.useRef(null);
+  const textRef = React.useRef(null);
+  const [shouldScroll, setShouldScroll] = useState(false);
+
+  useEffect(() => {
+    if (containerRef.current && textRef.current) {
+      const containerWidth = containerRef.current.offsetWidth;
+      const textWidth = textRef.current.scrollWidth;
+      setShouldScroll(textWidth > containerWidth);
+    }
+  }, [text]);
+
+  return (
+    <div ref={containerRef} className={`${className} marquee-container`}>
+      <div 
+        ref={textRef} 
+        className={`marquee-text ${shouldScroll ? 'animate' : ''}`}
+        style={{
+          display: shouldScroll ? 'inline-block' : 'block',
+          animationDuration: shouldScroll ? `${Math.max(8, text.length * 0.28)}s` : '0s'
+        }}
+      >
+        <span>{text}</span>
+        {shouldScroll && <span className="marquee-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>}
+        {shouldScroll && <span>{text}</span>}
+      </div>
+    </div>
+  );
+}
 
 export default function ClientLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -29,6 +62,30 @@ export default function ClientLayout() {
   
   const { currentSong, isPlaying, fetchSongs } = usePlayerStore();
   const { fetchPlaylists, fetchLikes } = useLibraryStore();
+
+  const [showPlayerPill, setShowPlayerPill] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (currentSong) {
+      if (isPlaying) {
+        setShowPlayerPill(true);
+      } else {
+        // En pausa: mantener visible y ocultar a los 2 minutos (120,000 ms)
+        timer = setTimeout(() => {
+          setShowPlayerPill(false);
+        }, 120000);
+      }
+    } else {
+      setShowPlayerPill(false);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [currentSong?.id, isPlaying]);
+
+  const activeDockMode = showPlayerPill ? mobileDockMode : 'nav';
   
   const accentColor = useSettingsStore(state => state.accentColor);
   const accentOpacity = useSettingsStore(state => state.accentOpacity);
@@ -44,11 +101,14 @@ export default function ClientLayout() {
     root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.5)`);
   }, [accentColor, accentOpacity]);
 
+  const syncDownloadedSongs = useOfflineStore(state => state.syncDownloadedSongs);
+
   useEffect(() => {
     fetchSongs();
     fetchPlaylists();
     fetchLikes();
-  }, [fetchSongs, fetchPlaylists, fetchLikes]);
+    syncDownloadedSongs();
+  }, []);
 
   // Variables para gestos táctiles (usamos refs para persistencia sin re-render)
   const touchStartRef = React.useRef({ x: 0, time: 0 });
@@ -84,7 +144,7 @@ export default function ClientLayout() {
       </nav>
 
         {/* MÓDULO DE MORFISMO LÍQUIDO (UNIFICADO) */}
-      <div className={`mobile-unified-dock visible mode-${mobileDockMode}`}>
+      <div className={`mobile-unified-dock visible mode-${activeDockMode}`}>
         <GlassButtonWrapper className="unified-glass-pill" radius="40" depth="12" blur="6" strength="0" background-color="rgba(20, 20, 20, 0.7)" chromatic-aberration="4">
           <div className="unified-pill-content">
             
@@ -111,7 +171,7 @@ export default function ClientLayout() {
             </div>
 
             {/* SECCIÓN REPRODUCTOR CON GESTOS PREMIUM */}
-            {currentSong && (
+            {showPlayerPill && (
               <div 
                 className="player-morph-section" 
                 onClick={(e) => {
@@ -152,7 +212,7 @@ export default function ClientLayout() {
                     {isPlaying && <div className="mini-playing-indicator"><span className="bar"></span><span className="bar"></span><span className="bar"></span></div>}
                   </div>
                   <div className="mini-info">
-                    <span className="mini-title">{currentSong?.title}</span>
+                    <ScrollingText text={currentSong?.title} className="mini-title" />
                     <span className="mini-artist">{currentSong?.artist}</span>
                   </div>
                   <button className="mini-pill-play-btn" onClick={(e) => { e.stopPropagation(); usePlayerStore.getState().togglePlay(); }}>

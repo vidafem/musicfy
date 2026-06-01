@@ -88,10 +88,20 @@ export const usePlayerStore = create((set, get) => ({
 
   // 2. Difusión de estado completo (Fuerza bruta para evitar desincronización)
   broadcastState: () => {
-    const { currentSong, isPlaying, currentTime, duration, activeDeviceId, mixerState } = get();
+    const { currentSong, queue, isPlaying, currentTime, duration, activeDeviceId, mixerState } = get();
     const updatedAt = Date.now();
+    
+    // Si la canción tiene un blob local, recuperar la URL remota original para los espejos
+    let songToSend = currentSong;
+    if (currentSong && (currentSong.url?.startsWith('blob:') || currentSong.url?.startsWith('data:'))) {
+      const originalSong = queue.find(s => s.id === currentSong.id);
+      if (originalSong && originalSong.url) {
+        songToSend = { ...currentSong, url: originalSong.url };
+      }
+    }
+
     get().sendCommand('SYNC_ALL', {
-      song: currentSong, // Enviamos el objeto COMPLETO de la canción
+      song: songToSend,
       isPlaying,
       currentTime,
       duration,
@@ -288,7 +298,7 @@ export const usePlayerStore = create((set, get) => ({
     });
   },
 
-  fetchSongs: async () => {
+  fetchSongs: async (options = { sources: ['local'] }) => {
     // 1. Carga inicial desde caché local (Carga instantánea)
     const cachedQueue = localStorage.getItem('musicfy_cached_queue');
     if (cachedQueue) {
@@ -298,17 +308,28 @@ export const usePlayerStore = create((set, get) => ({
       }
     }
 
-    // 2. Sincronización con el servidor
-    const { data, error } = await supabase
-      .from('songs')
-      .select('id, title, artist, cover_url, url, created_at, lyrics, background_url, duration')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    // 2. Sincronización con el servidor a través del HybridMusicProvider
+    try {
+      const { HybridMusicProvider } = await import('../providers/MusicProvider');
+      const songs = await HybridMusicProvider.search('', { includeExternal: false, limit: 100 });
+      
+      if (songs && songs.length > 0) {
+        set({ queue: songs, currentSong: get().currentSong || songs[0] });
+        // Guardar en caché para la próxima vez
+        localStorage.setItem('musicfy_cached_queue', JSON.stringify(songs));
+      }
+    } catch (err) {
+      console.warn('[usePlayerStore] Error al sincronizar cola local híbrida:', err);
+    }
+  },
 
-    if (!error && data.length > 0) {
-      set({ queue: data, currentSong: get().currentSong || data[0] });
-      // Guardar en caché para la próxima vez
-      localStorage.setItem('musicfy_cached_queue', JSON.stringify(data));
+  searchExternal: async (query) => {
+    try {
+      const { HybridMusicProvider } = await import('../providers/MusicProvider');
+      return await HybridMusicProvider.search(query, { includeExternal: true, limit: 20 });
+    } catch (err) {
+      console.error('[usePlayerStore] Error en searchExternal:', err);
+      return [];
     }
   },
 
@@ -334,14 +355,44 @@ export const usePlayerStore = create((set, get) => ({
   playSong: async (song) => {
     const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback, queue } = get();
 
-    // LÓGICA DE CACHÉ INTELIGENTE
-    const { CacheManager } = await import('../utils/cacheManager');
-    const playableUrl = await CacheManager.getOrCacheSong(song);
-    
-    // Pre-cachear la siguiente canción para que no haya saltos
-    const currentIndex = queue.findIndex(s => s.id === song.id);
-    if (currentIndex !== -1 && currentIndex < queue.length - 1) {
-      CacheManager.cacheSong(queue[currentIndex + 1].url);
+    // NUEVO: Intentar obtener versión offline primero si estamos desconectados
+    try {
+      const { OfflineManager } = await import('../lib/offlineManager');
+      const isOnline = await OfflineManager.isOnline();
+      
+      if (!isOnline) {
+        const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
+        if (offlineUrl) {
+          console.log('[Player] Cargando versión offline de:', song.title);
+          song = { ...song, url: offlineUrl, is_offline: true };
+        } else {
+          console.warn('[Player] Dispositivo offline y pista no descargada:', song.title);
+          return; // Detener reproducción si no hay conectividad ni versión local
+        }
+      }
+    } catch (offlineErr) {
+      console.warn('[Player] Offline validation error:', offlineErr);
+    }
+
+    // LÓGICA DE CACHÉ INTELIGENTE (solo para recursos remotos)
+    let playableUrl = song.url;
+    if (!song.url && song.source === 'youtube') {
+      try {
+        const { HybridMusicProvider } = await import('../providers/MusicProvider');
+        playableUrl = await HybridMusicProvider.getPlayableUrl(song);
+      } catch (e) {
+        console.error('[Player] Error al obtener URL de stream YouTube:', e);
+        return;
+      }
+    } else if (song.url && !song.url.startsWith('data:') && !song.url.startsWith('blob:')) {
+      const { CacheManager } = await import('../utils/cacheManager');
+      playableUrl = await CacheManager.getOrCacheSong(song);
+      
+      // Pre-cachear la siguiente canción para que no haya saltos
+      const currentIndex = queue.findIndex(s => s.id === song.id);
+      if (currentIndex !== -1 && currentIndex < queue.length - 1 && queue[currentIndex + 1].url) {
+        CacheManager.cacheSong(queue[currentIndex + 1].url);
+      }
     }
 
     if (!activeDeviceId || !isPlaying) {
@@ -356,7 +407,7 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     const updatedAt = Date.now();
-    // Usamos el playableUrl (que puede ser un blob local)
+    // Usamos el playableUrl (que puede ser un blob local o stream de youtube)
     set({ 
       currentSong: { ...song, url: playableUrl }, 
       isPlaying: true, 
@@ -364,12 +415,20 @@ export const usePlayerStore = create((set, get) => ({
       playbackUpdatedAt: updatedAt 
     });
 
-    if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().sendCommand('PLAY_SONG', { song, updatedAt });
+    if (song.source !== 'youtube' && !song.lyrics) get().fetchSongDetails(song.id);
+    get().sendCommand('PLAY_SONG', { song: { ...song, url: song.url }, updatedAt });
     get().saveRemotePlaybackState();
     
+    // Registrar reproducción en el recomendador de gustos
+    import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
+      recommendationEngine.recordPlay(song.id, queue);
+    }).catch(e => console.error(e));
+    
     // Mantenimiento de caché
-    CacheManager.cleanOldCache(30);
+    try {
+      const { CacheManager } = await import('../utils/cacheManager');
+      CacheManager.cleanOldCache(30);
+    } catch {}
   },
 
   togglePlay: () => {
@@ -464,6 +523,11 @@ export const usePlayerStore = create((set, get) => ({
       if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
       get().sendCommand('PLAY_SONG', { song: nextSong, updatedAt });
       get().saveRemotePlaybackState();
+      
+      // Registrar reproducción en el recomendador de gustos
+      import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
+        recommendationEngine.recordPlay(nextSong.id, queue);
+      }).catch(e => console.error(e));
     }
   },
 
@@ -494,6 +558,13 @@ export const usePlayerStore = create((set, get) => ({
       if (!prevSong.lyrics) get().fetchSongDetails(prevSong.id);
       get().sendCommand('PLAY_SONG', { song: prevSong, updatedAt: Date.now() });
       get().saveRemotePlaybackState();
+      
+      // Registrar reproducción en el recomendador de gustos
+      const allSongs = get().queue;
+      import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
+        recommendationEngine.recordPlay(prevSong.id, allSongs);
+      }).catch(e => console.error(e));
+
       console.log("[Player] ⏪ Retrocediendo a:", prevSong.title);
     } else {
       // Si no hay historial, solo reiniciamos

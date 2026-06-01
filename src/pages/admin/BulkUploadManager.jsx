@@ -15,6 +15,7 @@ import * as jsmediatags from 'jsmediatags';
 import { useMusicActions } from '../../hooks/useMusicActions';
 import { useMusicAI } from '../../hooks/useMusicAI';
 import { useMusicTags } from '../../hooks/useMusicTags';
+import { fetchFromPiped } from '../../utils/pipedService';
 import './Admin.css';
 
 const suggestionBtnStyle = {
@@ -96,7 +97,8 @@ const parseAudioMetadata = (file) =>
               lyrics: '',
               background_url: '',
               duration,
-              animated: false
+              animated: false,
+              video_url: ''
             },
             coverUrl: imageUrl
           });
@@ -113,7 +115,8 @@ const parseAudioMetadata = (file) =>
               lyrics: '',
               background_url: '',
               duration,
-              animated: false
+              animated: false,
+              video_url: ''
             },
             coverUrl: null
           });
@@ -148,6 +151,29 @@ export default function BulkUploadManager() {
   const [draftOriginalCoverBackup, setDraftOriginalCoverBackup] = useState(null);
   const [draftBackupMetadata, setDraftBackupMetadata] = useState(null);
   const [filters] = useState({ brightness: 100, contrast: 100, saturate: 100, blur: 0 });
+
+  const [videoSuggestions, setVideoSuggestions] = useState([]);
+  const [searchingVideo, setSearchingVideo] = useState(false);
+
+  const searchVideoSuggestions = async (title, artist) => {
+    if (!title) return;
+    setSearchingVideo(true);
+    setVideoSuggestions([]);
+    try {
+      const q = `${title} ${artist || ''} official music video`.trim();
+      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=music_videos`);
+      const items = (data.items || []).slice(0, 3).map(item => ({
+        id: item.url.split('=')[1] || item.url.split('/').pop(),
+        title: item.title,
+        uploader: item.uploaderName
+      }));
+      setVideoSuggestions(items);
+    } catch (e) {
+      console.error("Error searching video suggestions:", e);
+    } finally {
+      setSearchingVideo(false);
+    }
+  };
 
   const { uploadSong } = useMusicActions();
   const { fetchSyncedLyricsOnly } = useMusicTags();
@@ -289,6 +315,7 @@ export default function BulkUploadManager() {
     setAiSuggestions(null);
     setAlternativeCovers([]);
     setAlternativeFanarts([]);
+    setVideoSuggestions([]);
   };
 
   const openEdit = (row) => {
@@ -984,15 +1011,59 @@ export default function BulkUploadManager() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="admin-label">Duracion (seg)</label>
-                  <input
-                    type="text"
-                    value={draft.metadata.duration || 0}
-                    readOnly
-                    className="admin-input"
-                    style={{ ...inputStyle, opacity: 0.7 }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                  <div>
+                    <label className="admin-label">Duracion (seg)</label>
+                    <input
+                      type="text"
+                      value={draft.metadata.duration || 0}
+                      readOnly
+                      className="admin-input"
+                      style={{ ...inputStyle, opacity: 0.7 }}
+                    />
+                  </div>
+                  <div>
+                    <label className="admin-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Enlace de Video (YouTube/MP4)</span>
+                      <button
+                        type="button"
+                        onClick={() => searchVideoSuggestions(draft.metadata.title, draft.metadata.artist)}
+                        disabled={searchingVideo || !draft.metadata.title}
+                        className="ai-action-btn"
+                        style={{ padding: '2px 8px', fontSize: '0.65rem', border: '1px solid var(--accent-color)', height: '20px' }}
+                      >
+                        {searchingVideo ? <Loader2 size={10} className="spinner" /> : <Sparkles size={10} />}
+                        BUSCAR VIDEO IA
+                      </button>
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.metadata.video_url || ''}
+                      onChange={(event) => applyDraftField('video_url', event.target.value)}
+                      className="admin-input"
+                      style={inputStyle}
+                      placeholder="Ej: https://www.youtube.com/watch?v=..."
+                    />
+                    
+                    {videoSuggestions.length > 0 && (
+                      <div style={{ marginTop: '8px', display: 'grid', gap: '5px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <p style={{ fontSize: '0.65rem', color: 'var(--accent-color)', margin: '0 0 5px 0', fontWeight: 'bold' }}>SUGERENCIAS ENCONTRADAS:</p>
+                        {videoSuggestions.map(vid => (
+                          <button
+                            key={vid.id}
+                            type="button"
+                            onClick={() => {
+                              applyDraftField('video_url', `https://www.youtube.com/watch?v=${vid.id}`);
+                              setVideoSuggestions([]);
+                            }}
+                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.72rem', display: 'block', width: '100%', transition: 'all 0.2s' }}
+                          >
+                            <span style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>[Elegir]</span> {vid.title} - <span style={{ opacity: 0.6 }}>{vid.uploader}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -65,10 +65,17 @@ export function useMusicTags() {
 
   const fetchSyncedLyricsOnly = async (title, artist) => {
     try {
-      const lrcRes = await fetch(`https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`);
+      const cleanArtist = artist && artist !== 'Artista Desconocido' ? artist : '';
+      let url = '';
+      if (cleanArtist) {
+        url = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(title)}`;
+      } else {
+        url = `https://lrclib.net/api/search?q=${encodeURIComponent(title)}`;
+      }
+      const lrcRes = await fetch(url);
       if (lrcRes.ok) {
-        const lrcData = await lrcRes.ok ? await lrcRes.json() : [];
-        if (lrcData.length > 0) {
+        const lrcData = await lrcRes.json();
+        if (lrcData && lrcData.length > 0) {
           return lrcData[0].syncedLyrics || lrcData[0].plainLyrics || null;
         }
       }

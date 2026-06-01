@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Settings, Sliders, Trash2, LogOut, Disc3, Palette, RefreshCw } from 'lucide-react';
+import { X, Settings, Sliders, Trash2, LogOut, Disc3, Palette, RefreshCw, WifiOff } from 'lucide-react';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useOfflineStore } from '../store/useOfflineStore';
 import GlassButtonWrapper from './ui/GlassButtonWrapper';
 import './SettingsSidebar.css';
 
@@ -18,6 +19,10 @@ export default function SettingsSidebar({ isOpen, onClose }) {
     saveSettingsToCloud,
     clearCache 
   } = useSettingsStore();
+
+  const isOfflineMode = useOfflineStore(state => state.isOfflineMode);
+  const setOfflineMode = useOfflineStore(state => state.setOfflineMode);
+  const isNetworkOnline = useOfflineStore(state => state.isNetworkOnline);
 
   const [syncStatus, setSyncStatus] = React.useState('idle'); // 'idle', 'syncing', 'success'
 
@@ -184,6 +189,25 @@ export default function SettingsSidebar({ isOpen, onClose }) {
                 <span className="slider round"></span>
               </label>
             </div>
+          </div>
+
+          <div className="settings-section">
+            <h3>Modo Offline</h3>
+            <div className="setting-item">
+              <div className="setting-info">
+                <span><WifiOff size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Activar Modo Offline</span>
+                <p>Escucha solo las canciones descargadas sin consumir datos.</p>
+              </div>
+              <label className="switch">
+                <input type="checkbox" checked={isOfflineMode} onChange={(e) => setOfflineMode(e.target.checked)} />
+                <span className="slider round"></span>
+              </label>
+            </div>
+            {!isNetworkOnline && (
+              <div style={{ fontSize: '0.72rem', color: '#ffa726', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⚠️ Dispositivo sin conexión</span>
+              </div>
+            )}
           </div>
 
           <div className="settings-section">

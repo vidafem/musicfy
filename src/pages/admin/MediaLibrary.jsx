@@ -8,6 +8,7 @@ import { supabase } from '../../supabaseClient';
 import { useMusicAI } from '../../hooks/useMusicAI';
 import { useMusicActions } from '../../hooks/useMusicActions';
 import StatusModal from '../../components/admin/StatusModal';
+import { fetchFromPiped } from '../../utils/pipedService';
 
 export default function MediaLibrary() {
   const [songs, setSongs] = useState([]);
@@ -21,6 +22,29 @@ export default function MediaLibrary() {
   const [editingSong, setEditingSong] = useState(null);
   const [backupSong, setBackupSong] = useState(null);
   const [coverUrl, setCoverUrl] = useState('');
+
+  const [videoSuggestions, setVideoSuggestions] = useState([]);
+  const [searchingVideo, setSearchingVideo] = useState(false);
+
+  const searchVideoSuggestions = async (title, artist) => {
+    if (!title) return;
+    setSearchingVideo(true);
+    setVideoSuggestions([]);
+    try {
+      const q = `${title} ${artist || ''} official music video`.trim();
+      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=music_videos`);
+      const items = (data.items || []).slice(0, 3).map(item => ({
+        id: item.url.split('=')[1] || item.url.split('/').pop(),
+        title: item.title,
+        uploader: item.uploaderName
+      }));
+      setVideoSuggestions(items);
+    } catch (e) {
+      console.error("Error searching video suggestions:", e);
+    } finally {
+      setSearchingVideo(false);
+    }
+  };
 
   // Hooks
   const { 
@@ -52,6 +76,7 @@ export default function MediaLibrary() {
     setAiSuggestions(null);
     setAlternativeCovers([]);
     setAlternativeFanarts([]);
+    setVideoSuggestions([]);
     setShowEditModal(true);
   };
 
@@ -309,7 +334,44 @@ export default function MediaLibrary() {
                   <div><label style={{...editLabelStyle, fontSize: '0.75rem'}}>Álbum {aiSuggestions?.spotify?.album && <button onClick={() => setEditingSong({...editingSong, album: aiSuggestions.spotify.album})} style={suggestionBtnStyle}>IA: {aiSuggestions.spotify.album}</button>}</label><input type="text" value={editingSong.album || ''} onChange={e => setEditingSong({...editingSong, album: e.target.value})} style={{...editInputStyle, padding: '8px'}} /></div>
                   <div><label style={{...editLabelStyle, fontSize: '0.75rem'}}>Año</label><input type="number" value={editingSong.year || ''} onChange={e => setEditingSong({...editingSong, year: e.target.value})} style={{...editInputStyle, padding: '8px'}} /></div>
                 </div>
-                <div><label style={{...editLabelStyle, fontSize: '0.75rem'}}>Género</label><input type="text" value={editingSong.genre || ''} onChange={e => setEditingSong({...editingSong, genre: e.target.value})} style={{...editInputStyle, padding: '8px'}} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div><label style={{...editLabelStyle, fontSize: '0.75rem'}}>Género</label><input type="text" value={editingSong.genre || ''} onChange={e => setEditingSong({...editingSong, genre: e.target.value})} style={{...editInputStyle, padding: '8px'}} /></div>
+                  <div>
+                    <label style={{...editLabelStyle, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Enlace de Video (YouTube/MP4)</span>
+                      <button
+                        type="button"
+                        onClick={() => searchVideoSuggestions(editingSong.title, editingSong.artist)}
+                        disabled={searchingVideo || !editingSong.title}
+                        className="ai-action-btn"
+                        style={{ padding: '2px 8px', fontSize: '0.65rem', border: '1px solid var(--accent-color)', height: '20px' }}
+                      >
+                        {searchingVideo ? <Loader2 size={10} className="spinner" /> : <Sparkles size={10} />}
+                        BUSCAR VIDEO IA
+                      </button>
+                    </label>
+                    <input type="text" value={editingSong.video_url || ''} onChange={e => setEditingSong({...editingSong, video_url: e.target.value})} style={{...editInputStyle, padding: '8px'}} placeholder="Ej: https://www.youtube.com/watch?v=..." />
+                    
+                    {videoSuggestions.length > 0 && (
+                      <div style={{ marginTop: '8px', display: 'grid', gap: '5px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', width: '100%' }}>
+                        <p style={{ fontSize: '0.65rem', color: 'var(--accent-color)', margin: '0 0 5px 0', fontWeight: 'bold' }}>SUGERENCIAS ENCONTRADAS:</p>
+                        {videoSuggestions.map(vid => (
+                          <button
+                            key={vid.id}
+                            type="button"
+                            onClick={() => {
+                              setEditingSong({ ...editingSong, video_url: `https://www.youtube.com/watch?v=${vid.id}` });
+                              setVideoSuggestions([]);
+                            }}
+                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.72rem', display: 'block', width: '100%', transition: 'all 0.2s' }}
+                          >
+                            <span style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>[Elegir]</span> {vid.title} - <span style={{ opacity: 0.6 }}>{vid.uploader}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div><label style={{...editLabelStyle, fontSize: '0.75rem'}}>Letras Sincronizadas (LRC)</label><textarea value={editingSong.lyrics || ''} onChange={e => setEditingSong({...editingSong, lyrics: e.target.value})} style={{ ...editInputStyle, height: '160px', padding: '10px', resize: 'none', fontFamily: 'monospace', fontSize: '0.75rem' }} /></div>
               </div>
             </div>

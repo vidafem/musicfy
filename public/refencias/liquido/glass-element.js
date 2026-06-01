@@ -358,6 +358,8 @@ class GlassElement extends HTMLElement {
                     cursor: pointer;
                     transition: transform 0.1s ease;
                     position: relative;
+                    max-width: 100%;
+                    box-sizing: border-box;
                     ${this.autoSize ? `display: inline-block; width: fit-content; min-width: ${this.minWidth}px; min-height: ${this.minHeight}px;` : ''}
                 }
                 
@@ -366,14 +368,15 @@ class GlassElement extends HTMLElement {
                 }
 
                 .content {
-                    ${this.autoSize ? '' : 'width: 100%; height: 100%;'}
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     color: white;
                     text-align: center;
                     font-family: sans-serif;
-                    ${this.autoSize ? 'padding: var(--glass-padding, 16px 24px);' : ''}
+                    max-width: 100%;
+                    box-sizing: border-box;
+                    ${this.autoSize ? 'padding: var(--glass-padding, 16px 24px); width: 100%;' : 'width: 100%; height: 100%;'}
                 }
             </style>
             <div class="glass-box">

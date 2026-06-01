@@ -4,6 +4,7 @@ import { Heart, Plus, Search, Play, ChevronRight, X, Trash2 } from 'lucide-react
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useOfflineStore } from '../../store/useOfflineStore';
 import './Library.css';
 
 export default function Library() {
@@ -26,6 +27,10 @@ export default function Library() {
   const createPlaylist = useLibraryStore(state => state.createPlaylist);
   const deletePlaylist = useLibraryStore(state => state.deletePlaylist);
   const toggleLike = useLibraryStore(state => state.toggleLike);
+
+  // Estados Offline
+  const isOfflineMode = useOfflineStore(state => state.isOfflineMode);
+  const downloadedIds = useOfflineStore(state => state.downloadedIds);
 
   useEffect(() => {
     fetchPlaylists();
@@ -50,13 +55,21 @@ export default function Library() {
 
   const playlistCards = useMemo(() => {
     return playlists.map((playlist) => {
-      const covers = playlist.songs.slice(0, 4).map(song => song.cover_url).filter(Boolean);
+      // Filtrar canciones si estamos en offline
+      const songs = isOfflineMode
+        ? playlist.songs.filter(s => downloadedIds.includes(s.id))
+        : playlist.songs;
+      const covers = songs.slice(0, 4).map(song => song.cover_url).filter(Boolean);
+      const isDownloaded = songs.length > 0 && songs.every(s => downloadedIds.includes(s.id));
+      
       return {
         ...playlist,
+        songs,
+        isDownloaded,
         covers: covers.length > 0 ? covers : Array(4).fill(null)
       };
-    });
-  }, [playlists]);
+    }).filter(pl => !isOfflineMode || pl.songs.length > 0);
+  }, [playlists, isOfflineMode, downloadedIds]);
 
   const filteredPlaylists = useMemo(() => {
     if (!playlistQuery.trim()) return playlistCards;
@@ -68,7 +81,13 @@ export default function Library() {
     );
   }, [playlistCards, playlistQuery]);
 
-  const likedList = useMemo(() => queue.filter(song => likedSongs.includes(song.id)), [queue, likedSongs]);
+  const likedList = useMemo(() => {
+    const list = queue.filter(song => likedSongs.includes(song.id));
+    if (isOfflineMode) {
+      return list.filter(song => downloadedIds.includes(song.id));
+    }
+    return list;
+  }, [queue, likedSongs, isOfflineMode, downloadedIds]);
 
   const handleSongClick = (song) => {
     if (currentSong?.id === song.id) {
@@ -141,7 +160,10 @@ export default function Library() {
                 <span className={`liked-song-name ${isActive ? 'active' : ''}`}>
                   {song.title}
                 </span>
-                <span className="liked-song-artist">{song.artist}</span>
+                <span className="liked-song-artist">
+                  {downloadedIds.includes(song.id) && <span className="green-dl-dot-small" style={{ color: '#1db954', marginRight: '6px', fontSize: '0.65rem' }}>▼</span>}
+                  {song.artist}
+                </span>
               </div>
             </div>
           );

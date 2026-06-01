@@ -492,6 +492,7 @@
     .duration-text { display: none; }
     .song-like-btn { opacity: 1; }
     .song-more-btn { opacity: 1; }
+    .song-download-btn { opacity: 1; }
 }
 
 /* TV MODE (Extra Large) */
@@ -499,3 +500,85 @@
     .playlist-title { font-size: 6rem; }
     .playlist-cover-art { width: 300px; height: 300px; }
 }
+
+/* OFFLINE CAPABILITY ELEMENTS */
+.song-row.offline-disabled {
+    opacity: 0.35;
+    cursor: not-allowed !important;
+}
+
+.song-row.offline-disabled:hover {
+    background: transparent !important;
+}
+
+.song-download-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+}
+
+.song-download-btn {
+    background: transparent;
+    border: none;
+    color: #b3b3b3;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s, color 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
+.song-download-btn:hover {
+    color: white;
+    transform: scale(1.08);
+}
+
+.song-row:hover .song-download-btn, 
+.song-download-btn.downloaded {
+    opacity: 1;
+}
+
+.song-download-btn.downloaded {
+    color: #1db954;
+}
+
+.dl-pct-text {
+    font-size: 0.68rem;
+    color: #1db954;
+    font-weight: 700;
+    min-width: 26px;
+    text-align: center;
+}
+
+.green-dl-dot-small {
+    color: #1db954;
+    font-size: 0.65rem;
+    margin-right: 6px;
+    display: inline-block;
+    transform: translateY(0.5px);
+}
+
+.action-icon-btn.download-playlist-btn.downloaded {
+    color: #1db954;
+}
+
+.spinner-download-icon {
+    display: inline-block;
+    animation: spin-download 1.5s linear infinite;
+    font-size: 1.15rem;
+}
+
+@keyframes spin-download {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .song-download-btn {
+        opacity: 1;
+    }
+}
+

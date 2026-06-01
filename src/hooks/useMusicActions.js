@@ -6,12 +6,17 @@ const WORKER_URL = 'https://musicfy.canonedu17.workers.dev';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const withTimeout = async (promise, timeoutMs = 30000) => {
+const withTimeout = async (promiseOrFn, timeoutMs = 30000) => {
+  const controller = new AbortController();
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('Tiempo de espera agotado')), timeoutMs);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Tiempo de espera agotado'));
+    }, timeoutMs);
   });
   try {
+    const promise = typeof promiseOrFn === 'function' ? promiseOrFn(controller.signal) : promiseOrFn;
     return await Promise.race([promise, timeoutPromise]);
   } finally {
     clearTimeout(timeoutId);
@@ -38,7 +43,7 @@ const normalizeSupabaseId = (result) => {
 
 const insertSongIntoSupabase = async (songData) => {
   const { data, error } = await withTimeout(
-    supabase
+    (signal) => supabase
       .from('songs')
       .insert([
         {
@@ -51,11 +56,13 @@ const insertSongIntoSupabase = async (songData) => {
           lyrics: songData.lyrics,
           genre: songData.genre,
           year: songData.year,
-          duration: songData.duration
+          duration: songData.duration,
+          video_url: songData.video_url
         }
       ])
       .select('id')
-      .single(),
+      .single()
+      .abortSignal(signal),
     120000
   );
 
@@ -68,12 +75,15 @@ const insertSongIntoSupabase = async (songData) => {
 };
 
 const insertSongViaRest = async (songData) => {
+  const sessionData = await supabase.auth.getSession();
+  const token = sessionData?.data?.session?.access_token || SUPABASE_ANON_KEY;
+
   const response = await withTimeout(
-    fetch(`${SUPABASE_URL}/rest/v1/songs`, {
+    (signal) => fetch(`${SUPABASE_URL}/rest/v1/songs`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Prefer: 'return=representation'
       },
@@ -88,9 +98,11 @@ const insertSongViaRest = async (songData) => {
           lyrics: songData.lyrics,
           genre: songData.genre,
           year: songData.year,
-          duration: songData.duration
+          duration: songData.duration,
+          video_url: songData.video_url
         }
-      ])
+      ]),
+      signal
     }),
     120000
   );
@@ -104,9 +116,31 @@ const insertSongViaRest = async (songData) => {
   return normalizeSupabaseId(json?.[0]);
 };
 
+const getBlobFromUrl = async (url) => {
+  if (url.startsWith('data:')) {
+    const parts = url.split(',');
+    const byteString = atob(parts[1]);
+    const mimeString = parts[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeString });
+  }
+  if (url.startsWith('blob:')) {
+    const res = await fetch(url);
+    return await res.blob();
+  }
+  const fetchUrl = `${WORKER_URL}/proxy-image?url=${encodeURIComponent(url)}`;
+  const res = await withTimeout(fetch(fetchUrl), 30000);
+  if (!res.ok) throw new Error('Proxy fetch failed');
+  return await res.blob();
+};
+
 const toDuration = (value) => {
   const parsed = parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 };
 
 export function useMusicActions() {
@@ -150,7 +184,7 @@ export function useMusicActions() {
       // MP3 Task
       const mp3Path = `music/${safeTitle}_${seed}.mp3`;
       uploadedKeys.push(mp3Path);
-      uploadTasks.push(withTimeout(uploadToR2(file, mp3Path), 120000).then(u => { 
+      uploadTasks.push(withTimeout((sig) => uploadToR2(file, mp3Path, sig), 120000).then(u => { 
         finalMp3Url = u; 
         onProgress?.(45); 
       }));
@@ -162,16 +196,16 @@ export function useMusicActions() {
         } else {
           uploadTasks.push((async () => {
             try {
-              const fetchUrl = coverUrl.startsWith('data:') || coverUrl.startsWith('blob:') ? coverUrl : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(coverUrl)}`;
-              const res = await withTimeout(fetch(fetchUrl), 30000);
-              if (res.ok) {
-                const b = await res.blob();
-                const ext = (b.type || '').includes('video') ? 'mp4' : 'jpg';
-                const p = `covers/${safeTitle}_${seed}.${ext}`;
-                finalCoverUrl = await withTimeout(uploadToR2(b, p), 90000);
-                uploadedKeys.push(p);
-              } else { finalCoverUrl = coverUrl; }
-            } catch { finalCoverUrl = coverUrl; }
+              const b = await getBlobFromUrl(coverUrl);
+              const ext = (b.type || '').includes('video') ? 'mp4' : 'jpg';
+              const p = `covers/${safeTitle}_${seed}.${ext}`;
+              finalCoverUrl = await withTimeout((sig) => uploadToR2(b, p, sig), 90000);
+              uploadedKeys.push(p);
+            } catch (err) {
+              console.warn('[useMusicActions] Error cargando portada:', err);
+              // Si falla R2, NO dejamos la URL base64/blob cruda en Supabase
+              finalCoverUrl = coverUrl.startsWith('data:') || coverUrl.startsWith('blob:') ? null : coverUrl;
+            }
             onProgress?.(70);
           })());
         }
@@ -184,15 +218,14 @@ export function useMusicActions() {
         } else {
           uploadTasks.push((async () => {
             try {
-              const fetchUrl = metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:') ? metadata.background_url : `${WORKER_URL}/proxy-image?url=${encodeURIComponent(metadata.background_url)}`;
-              const res = await withTimeout(fetch(fetchUrl), 30000);
-              if (res.ok) {
-                const b = await res.blob();
-                const p = `backgrounds/${safeTitle}_bg_${seed}.jpg`;
-                finalBackgroundUrl = await withTimeout(uploadToR2(b, p), 90000);
-                uploadedKeys.push(p);
-              } else { finalBackgroundUrl = metadata.background_url; }
-            } catch { finalBackgroundUrl = metadata.background_url; }
+              const b = await getBlobFromUrl(metadata.background_url);
+              const p = `backgrounds/${safeTitle}_bg_${seed}.jpg`;
+              finalBackgroundUrl = await withTimeout((sig) => uploadToR2(b, p, sig), 90000);
+              uploadedKeys.push(p);
+            } catch (err) {
+              console.warn('[useMusicActions] Error cargando fondo:', err);
+              finalBackgroundUrl = metadata.background_url.startsWith('data:') || metadata.background_url.startsWith('blob:') ? null : metadata.background_url;
+            }
             onProgress?.(85);
           })());
         }
@@ -209,10 +242,11 @@ export function useMusicActions() {
         genre: metadata.genre || '',
         year: toNumericYear(metadata.year),
         lyrics: metadata.lyrics || '',
-        cover_url: finalCoverUrl,
-        background_url: finalBackgroundUrl,
+        cover_url: finalCoverUrl?.startsWith('data:') || finalCoverUrl?.startsWith('blob:') ? null : finalCoverUrl,
+        background_url: finalBackgroundUrl?.startsWith('data:') || finalBackgroundUrl?.startsWith('blob:') ? null : finalBackgroundUrl,
         url: finalMp3Url,
-        duration: toDuration(metadata.duration)
+        duration: toDuration(metadata.duration),
+        video_url: metadata.video_url || null
       };
 
       console.log("[Supabase] 🚀 Usando vía rápida (RPC)...", songData);
@@ -225,7 +259,7 @@ export function useMusicActions() {
         try {
           // Vía rápida con tiempo de gracia extendido
           const { data: newId, error: rpcError } = await withTimeout(
-            supabase.rpc('quick_add_song', {
+            (signal) => supabase.rpc('quick_add_song', {
               p_title: songData.title,
               p_artist: songData.artist,
               p_album: songData.album,
@@ -235,8 +269,9 @@ export function useMusicActions() {
               p_lyrics: songData.lyrics,
               p_genre: songData.genre,
               p_year: songData.year,
-              p_duration: songData.duration
-            }),
+              p_duration: songData.duration,
+              p_video_url: songData.video_url
+            }).abortSignal(signal),
             90000 // 90 SEGUNDOS - Paciencia extrema para el servidor
           );
 
@@ -264,35 +299,43 @@ export function useMusicActions() {
           break;
         } catch (err) {
           lastError = err;
-          console.warn(`[Supabase] RPC no disponible. Intentando fallback directo... (${attempts} restantes)`);
-          console.error('[Supabase] Detalle del error en RPC:', err);
-          if (attempts <= 1) {
-            try {
-              const fallbackId = await insertSongIntoSupabase(songData);
-              if (!fallbackId) {
-                throw new Error('Fallback directo no devolvió ID');
-              }
-              finalResult = { ...songData, id: fallbackId };
-              break;
-            } catch (fallbackError) {
-              lastError = fallbackError;
-              console.error('[Supabase] Fallback directo falló:', fallbackError);
-
-              try {
-                const restId = await insertSongViaRest(songData);
-                if (!restId) {
-                  throw new Error('REST fallback no devolvió ID');
-                }
-                finalResult = { ...songData, id: restId };
-                break;
-              } catch (restError) {
-                lastError = restError;
-                console.error('[Supabase] REST fallback falló:', restError);
-              }
+          console.warn(`[Supabase] Error en intento RPC (${attempts} restantes):`, err);
+          
+          // Si el error no es un timeout, no tiene sentido reintentar (ej: violación de esquema o permisos)
+          const isTimeout = err.message === 'Tiempo de espera agotado';
+          if (!isTimeout) {
+            attempts = 0; // Detener intentos RPC e ir directo a fallbacks
+          } else {
+            attempts -= 1;
+            if (attempts > 0) {
+              await new Promise((r) => setTimeout(r, 1000));
             }
           }
-          attempts -= 1;
-          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+
+      if (!finalResult) {
+        console.log("[Supabase] RPC falló. Iniciando fallbacks directos...");
+        try {
+          const fallbackId = await insertSongIntoSupabase(songData);
+          if (!fallbackId) {
+            throw new Error('Fallback directo no devolvió ID');
+          }
+          finalResult = { ...songData, id: fallbackId };
+        } catch (fallbackError) {
+          lastError = fallbackError;
+          console.error('[Supabase] Fallback directo falló:', fallbackError);
+
+          try {
+            const restId = await insertSongViaRest(songData);
+            if (!restId) {
+              throw new Error('REST fallback no devolvió ID');
+            }
+            finalResult = { ...songData, id: restId };
+          } catch (restError) {
+            lastError = restError;
+            console.error('[Supabase] REST fallback falló:', restError);
+          }
         }
       }
 
@@ -325,7 +368,7 @@ export function useMusicActions() {
     const uploadToken = `${file.name}:${file.size}:${file.lastModified || 0}:${currentSessionTimestamp}`;
     const now = Date.now();
     const lastAt = recentUploadsRef.current.get(uploadToken);
-    if (lastAt && now - lastAt < 120000) return;
+    if (lastAt && now - lastAt < 15000) return; // Reducido a 15 segundos para mayor flexibilidad
 
     recentUploadsRef.current.set(uploadToken, now);
     uploadLockRef.current = true;
@@ -423,6 +466,7 @@ export function useMusicActions() {
 
   const handleUpdate = async ({ song, metadata, coverUrl, onComplete }) => {
     try {
+      const parsedYear = metadata.year ? parseInt(metadata.year, 10) : null;
       const { error } = await supabase
         .from('songs')
         .update({
@@ -430,10 +474,11 @@ export function useMusicActions() {
           artist: metadata.artist,
           album: metadata.album,
           genre: metadata.genre,
-          year: metadata.year,
+          year: Number.isInteger(parsedYear) ? parsedYear : null,
           lyrics: metadata.lyrics,
           cover_url: coverUrl,
-          background_url: metadata.background_url
+          background_url: metadata.background_url,
+          video_url: metadata.video_url || null
         })
         .eq('id', song.id);
 

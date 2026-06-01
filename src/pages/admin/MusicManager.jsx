@@ -5,6 +5,7 @@ import { useMusicAI } from '../../hooks/useMusicAI';
 import { useMusicTags } from '../../hooks/useMusicTags';
 import { useMusicActions } from '../../hooks/useMusicActions';
 import StatusModal from '../../components/admin/StatusModal';
+import { fetchFromPiped } from '../../utils/pipedService';
 import './Admin.css';
 
 const suggestionBtnStyle = {
@@ -35,12 +36,35 @@ export default function MusicManager({ onMusicAdded }) {
   const [metadata, setMetadata] = useState({
     title: '', artist: '', album: '', lyrics: '', background_url: '',
     genre: '', year: '', artist_image: '', composer: '', bpm: '',
-    key: '', label: '', language: '', mood: '', duration: 0, animated: false
+    key: '', label: '', language: '', mood: '', duration: 0, animated: false, video_url: ''
   });
   const [coverUrl, setCoverUrl] = useState(null);
   const [originalCoverBackup, setOriginalCoverBackup] = useState(null);
   const [backupMetadata, setBackupMetadata] = useState(null);
   const [currentSessionTimestamp] = useState(new Date().getTime());
+
+  const [videoSuggestions, setVideoSuggestions] = useState([]);
+  const [searchingVideo, setSearchingVideo] = useState(false);
+
+  const searchVideoSuggestions = async (title, artist) => {
+    if (!title) return;
+    setSearchingVideo(true);
+    setVideoSuggestions([]);
+    try {
+      const q = `${title} ${artist || ''} official music video`.trim();
+      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=music_videos`);
+      const items = (data.items || []).slice(0, 3).map(item => ({
+        id: item.url.split('=')[1] || item.url.split('/').pop(),
+        title: item.title,
+        uploader: item.uploaderName
+      }));
+      setVideoSuggestions(items);
+    } catch (e) {
+      console.error("Error searching video suggestions:", e);
+    } finally {
+      setSearchingVideo(false);
+    }
+  };
 
   // Hooks extraídos
   const { 
@@ -59,7 +83,7 @@ export default function MusicManager({ onMusicAdded }) {
     setFile(null);
     setMetadata({ 
       title: '', artist: '', album: '', lyrics: '', background_url: '', 
-      genre: '', year: '', artist_image: '', duration: 0, animated: false 
+      genre: '', year: '', artist_image: '', duration: 0, animated: false, video_url: '' 
     });
     setCoverUrl(null);
     setOriginalCoverBackup(null);
@@ -295,9 +319,46 @@ export default function MusicManager({ onMusicAdded }) {
                   </div>
                 </div>
 
-                <div>
-                  <label className="admin-label">Duración (seg)</label>
-                  <input type="text" value={metadata.duration || ''} readOnly className="admin-input" style={{ ...inputStyle, opacity: 0.7 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                  <div>
+                    <label className="admin-label">Duración (seg)</label>
+                    <input type="text" value={metadata.duration || ''} readOnly className="admin-input" style={{ ...inputStyle, opacity: 0.7 }} />
+                  </div>
+                  <div>
+                    <label className="admin-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Enlace de Video (YouTube/MP4)</span>
+                      <button
+                        type="button"
+                        onClick={() => searchVideoSuggestions(metadata.title, metadata.artist)}
+                        disabled={searchingVideo || !metadata.title}
+                        className="ai-action-btn"
+                        style={{ padding: '2px 8px', fontSize: '0.65rem', border: '1px solid var(--accent-color)', height: '20px' }}
+                      >
+                        {searchingVideo ? <Loader2 size={10} className="spinner" /> : <Sparkles size={10} />}
+                        BUSCAR VIDEO IA
+                      </button>
+                    </label>
+                    <input type="text" value={metadata.video_url || ''} onChange={(e) => setMetadata({ ...metadata, video_url: e.target.value })} className="admin-input" style={inputStyle} placeholder="Ej: https://www.youtube.com/watch?v=..." />
+                    
+                    {videoSuggestions.length > 0 && (
+                      <div style={{ marginTop: '8px', display: 'grid', gap: '5px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <p style={{ fontSize: '0.65rem', color: 'var(--accent-color)', margin: '0 0 5px 0', fontWeight: 'bold' }}>SUGERENCIAS ENCONTRADAS:</p>
+                        {videoSuggestions.map(vid => (
+                          <button
+                            key={vid.id}
+                            type="button"
+                            onClick={() => {
+                              setMetadata({ ...metadata, video_url: `https://www.youtube.com/watch?v=${vid.id}` });
+                              setVideoSuggestions([]);
+                            }}
+                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.72rem', display: 'block', width: '100%', transition: 'all 0.2s' }}
+                          >
+                            <span style={{ fontWeight: 'bold', color: 'var(--accent-color)' }}>[Elegir]</span> {vid.title} - <span style={{ opacity: 0.6 }}>{vid.uploader}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

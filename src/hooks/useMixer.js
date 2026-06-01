@@ -1,4 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { isHarmonicallyCompatible, bpmCompatibilityScore, BPMDetector } from '../lib/bpmDetector';
+
+// Método de análisis acústico automático (para guardar BPM y Tonalidad en Supabase)
+export async function analyzeSongBPM(song) {
+  try {
+    const detector = new BPMDetector();
+    console.log('[Mixer] Iniciando análisis de BPM para:', song.title);
+    const analysis = await detector.analyze(song.url);
+    
+    if (analysis.bpm) {
+      const { supabase } = await import('../supabaseClient');
+      const { error } = await supabase
+        .from('songs')
+        .update({ bpm: analysis.bpm, key_signature: analysis.key, energy: analysis.energy })
+        .eq('id', song.id);
+        
+      if (error) throw error;
+      console.log('[Mixer] Análisis guardado en Supabase para:', song.title, analysis);
+    }
+    return analysis;
+  } catch (err) {
+    console.warn('[Mixer] Falló analyzeSongBPM:', err);
+    return { bpm: null, key: null, energy: null };
+  }
+}
 
 export function useMixer({
   currentSong,
@@ -38,20 +63,17 @@ export function useMixer({
   const isMaster = !activeDeviceId || activeDeviceId === deviceId;
 
   useEffect(() => {
-    // Si somos el dispositivo activo, no nos sincronizamos con nosotros mismos desde la nube
     if (isMaster) return;
 
     if (mixerState && mixerState.active) {
       setIsMixingSync(true);
       setNextSongInfo(mixerState.toSong);
       
-      // Sincronización agresiva de la transición UI
       const elapsed = (Date.now() - mixerState.startedAt) / 1000;
       setNextCurrentTime(Math.max(0, elapsed));
       setNextDuration(mixerState.toSong?.duration || 0);
       setUiTransition(elapsed > (mixerState.crossfadeTime * 0.4));
     } else {
-      // Limpieza cuando el mixer se desactiva
       if (isMixingRef.current) {
         setIsMixingSync(false);
         setNextSongInfo(null);
@@ -64,7 +86,6 @@ export function useMixer({
 
   useEffect(() => {
     const mainAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
-    const fadeSeconds = Math.max(1, Number(crossfadeTime) || 1);
     
     // Solo el dispositivo principal ejecuta el audio y la lógica de fade
     if (!isMaster) return;
@@ -75,11 +96,28 @@ export function useMixer({
         return;
       }
 
+      // Encontrar la siguiente canción
+      const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+      const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextS = queue[(safeIndex + 1) % queue.length];
+
+      // Smart Crossfade: Calcular tiempo dinámico según compatibilidad armónica y BPM
+      let fadeSeconds = Math.max(1, Number(crossfadeTime) || 1);
+      if (nextS) {
+        const isCompatible = isHarmonicallyCompatible(currentSong.key_signature, nextS.key_signature);
+        const bpmScore = bpmCompatibilityScore(currentSong.bpm, nextS.bpm);
+        
+        if (!isCompatible || bpmScore < 0.5) {
+          // Canciones incompatibles: mezcla más corta para no causar disonancia o desfase rítmico audible
+          fadeSeconds = Math.max(1, Math.round(fadeSeconds * 0.5));
+        }
+      }
+
       const timeLeft = (mainAudio.duration || 0) - mainAudio.currentTime;
 
       if (mainAudio.duration > 0 && timeLeft <= (fadeSeconds + 0.5) && timeLeft > 0) {
         if (!isMixingRef.current) {
-          console.log(`[Mixer] 🚀 Iniciando mezcla. Tiempo restante: ${timeLeft.toFixed(2)}s`);
+          console.log(`[Mixer] 🚀 Mezcla Armónica. Tiempo crossfade: ${fadeSeconds}s. Restante: ${timeLeft.toFixed(2)}s`);
           setIsMixingSync(true);
           handoffDoneRef.current = false;
         }
@@ -87,11 +125,8 @@ export function useMixer({
         const secAudio = activeChannel === 'A' ? audioBRef.current : audioARef.current;
         if (!secAudio) return;
 
-        if (!nextSongInfo) {
-          const currentIndex = queue.findIndex(s => s.id === currentSong.id);
-          const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-          const nextS = queue[(safeIndex + 1) % queue.length];
-          if (nextS && nextS.id !== currentSong.id) {
+        if (!nextSongInfo && nextS) {
+          if (nextS.id !== currentSong.id) {
             console.log(`[Mixer] 🎵 Preparando canción entrante: ${nextS.title}`);
             setNextSongInfo(nextS);
             setNextCurrentTime(0);

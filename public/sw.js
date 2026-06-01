@@ -28,14 +28,46 @@ self.addEventListener('activate', (event) => {
 
 // Estrategia: Network First, falling back to Cache
 self.addEventListener('fetch', (event) => {
-  // Ignorar peticiones a Supabase y APIs externas para no romper la música en vivo
-  if (event.request.url.includes('supabase') || event.request.url.includes('piped') || event.request.url.includes('r2')) {
+  // Ignorar peticiones a Supabase, APIs externas y Cloudflare R2
+  if (
+    event.request.url.includes('supabase') || 
+    event.request.url.includes('piped') || 
+    event.request.url.includes('r2')
+  ) {
+    return;
+  }
+
+  // Ignorar esquemas que no sean http/https (ej: extensiones de chrome)
+  if (!event.request.url.startsWith('http')) {
     return;
   }
 
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (!response || response.status === 404) {
+          return caches.match(event.request).then((cached) => cached || response);
+        }
+        return response;
+      })
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        // Si es una petición de navegación (HTML/SPA) y falló la red, servir el index.html
+        if (event.request.mode === 'navigate') {
+          const indexCache = await caches.match('/index.html');
+          if (indexCache) return indexCache;
+        }
+
+        // Fallback final: retornar una respuesta vacía o de error en vez de undefined para no romper el navegador
+        return new Response('Error de conexión local', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      })
   );
 });

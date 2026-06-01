@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Globe, Play, Heart, Loader2, Music } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { fetchFromPiped, getStreamUrlEndpoint } from '../../utils/pipedService';
 import './GlobalSearch.css';
 
 /**
@@ -28,17 +29,16 @@ export default function GlobalSearch() {
     
     try {
       // Usamos una instancia pública de Piped (YouTube Proxy) para la búsqueda
-      const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_videos`);
-      const data = await res.json();
+      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(query)}&filter=music_videos`);
       
       // Mapeamos los resultados al formato que entiende nuestra app
-      const formattedResults = data.items.map(item => ({
+      const formattedResults = (data.items || []).map(item => ({
         id: item.url.split('=')[1] || item.url.split('/').pop(), // ID de YouTube
         title: item.title,
         artist: item.uploaderName,
         cover_url: item.thumbnail,
         // Generamos una URL de streaming directa (esto es lo que permite reproducir sin anuncios)
-        url: `https://pipedapi.kavin.rocks/streams/${item.url.split('=')[1] || item.url.split('/').pop()}`,
+        url: getStreamUrlEndpoint(item.url.split('=')[1] || item.url.split('/').pop()),
         is_external: true, // Marca para saber que viene de YouTube
         duration_text: item.duration ? Math.floor(item.duration / 60) + ":" + (item.duration % 60).toString().padStart(2, '0') : ''
       }));
@@ -60,8 +60,7 @@ export default function GlobalSearch() {
     // Para obtener la URL real del stream (mp3/webm) necesitamos hacer un fetch al stream info
     setLoading(true);
     try {
-        const res = await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`);
-        const data = await res.json();
+        const data = await fetchFromPiped(`/streams/${song.id}`);
         
         // Buscamos el stream de audio con mejor calidad
         const audioStream = data.audioStreams.find(s => s.format === 'M4A' || s.format === 'WEBM') || data.audioStreams[0];

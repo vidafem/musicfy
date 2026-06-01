@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Heart, Play, Shuffle, Search, ArrowLeft, Plus, MoreHorizontal, Clock, Music } from 'lucide-react';
+import { Heart, Play, Shuffle, Search, ArrowLeft, Plus, MoreHorizontal, Clock, Music, ArrowDownCircle } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useOfflineStore } from '../../store/useOfflineStore';
 import './PlaylistDetail.css';
 
 export default function PlaylistDetail() {
@@ -22,23 +23,27 @@ export default function PlaylistDetail() {
   const addSongToPlaylist = useLibraryStore(state => state.addSongToPlaylist);
   const toggleLike = useLibraryStore(state => state.toggleLike);
 
-  useEffect(() => {
-    if (playlists.length === 0) {
-      fetchPlaylists();
-    }
-  }, [playlists.length, fetchPlaylists]);
-
-  const [scrollY, setScrollY] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  // Estados de descargas offline
+  const isOfflineMode = useOfflineStore(state => state.isOfflineMode);
+  const downloadedIds = useOfflineStore(state => state.downloadedIds);
+  const activeDownloads = useOfflineStore(state => state.activeDownloads);
+  const downloadProgress = useOfflineStore(state => state.downloadProgress);
+  const downloadSong = useOfflineStore(state => state.downloadSong);
+  const removeDownload = useOfflineStore(state => state.removeDownload);
+  const downloadPlaylist = useOfflineStore(state => state.downloadPlaylist);
 
   const playlist = useMemo(() => playlists.find(p => p.id === id), [playlists, id]);
+
+  // Checar si toda la playlist está descargada
+  const isPlaylistDownloaded = useMemo(() => {
+    if (!playlist || !playlist.songs || playlist.songs.length === 0) return false;
+    return playlist.songs.every(song => downloadedIds.includes(song.id));
+  }, [playlist, downloadedIds]);
+
+  const isPlaylistDownloading = useMemo(() => {
+    if (!playlist || !playlist.songs) return false;
+    return playlist.songs.some(song => activeDownloads.has(song.id));
+  }, [playlist, activeDownloads]);
 
   const playlistSongs = useMemo(() => {
     if (!playlist) return [];
@@ -144,8 +149,26 @@ export default function PlaylistDetail() {
           <button className="action-icon-btn" onClick={handleShuffle} title="Aleatorio">
             <Shuffle size={24} />
           </button>
-          <button className="action-icon-btn" title="Favoritos">
-             <Heart size={24} />
+          <button 
+            className={`action-icon-btn download-playlist-btn ${isPlaylistDownloaded ? 'downloaded' : ''}`}
+            onClick={() => {
+              if (isPlaylistDownloaded) {
+                if (window.confirm('¿Deseas eliminar las descargas offline de esta playlist?')) {
+                  playlist.songs.forEach(s => removeDownload(s.id));
+                }
+              } else {
+                downloadPlaylist(playlist.title, playlist.songs);
+              }
+            }}
+            title="Descargar playlist"
+          >
+            {isPlaylistDownloading ? (
+              <span className="spinner-download-icon">⏳</span>
+            ) : isPlaylistDownloaded ? (
+              <ArrowDownCircle size={24} fill="#1db954" color="black" />
+            ) : (
+              <ArrowDownCircle size={24} />
+            )}
           </button>
           <button className="action-icon-btn">
             <MoreHorizontal size={24} />
@@ -188,12 +211,21 @@ export default function PlaylistDetail() {
             {playlistSongs.map((song, index) => {
               const isActive = currentSong?.id === song.id;
               const isLiked = likedSongs.includes(song.id);
+              const isDownloaded = downloadedIds.includes(song.id);
+              const isDownloading = activeDownloads.has(song.id);
+              const isAvailable = !isOfflineMode || isDownloaded;
               
               return (
                 <div 
                   key={song.id} 
-                  className={`song-row ${isActive ? 'active' : ''}`}
-                  onClick={() => playSong(song)}
+                  className={`song-row ${isActive ? 'active' : ''} ${!isAvailable ? 'offline-disabled' : ''}`}
+                  onClick={() => {
+                    if (!isAvailable) {
+                      alert('Esta canción no está descargada para reproducirse offline.');
+                      return;
+                    }
+                    playSong(song);
+                  }}
                 >
                   <div className="col-idx">
                     {isActive && isPlaying ? (
@@ -208,7 +240,10 @@ export default function PlaylistDetail() {
                     <img src={song.cover_url} alt="" className="song-thumb" />
                     <div className="song-details">
                       <span className="song-name">{song.title}</span>
-                      <span className="song-artist">{song.artist}</span>
+                      <span className="song-artist">
+                        {isDownloaded && <span className="green-dl-dot-small" title="Descargado offline">▼</span>}
+                        {song.artist}
+                      </span>
                     </div>
                   </div>
 
@@ -217,17 +252,32 @@ export default function PlaylistDetail() {
                   </div>
 
                   <div className="col-date">
-                    <span>hace 2 días</span>
+                    <span>hace {Math.floor(Math.random() * 5 + 1)} días</span>
                   </div>
 
                   <div className="col-duration">
+                    <div className="song-download-wrapper" onClick={(e) => e.stopPropagation()}>
+                      {isDownloading ? (
+                        <span className="dl-pct-text">{downloadProgress[song.id] || 0}%</span>
+                      ) : isDownloaded ? (
+                        <button className="song-download-btn downloaded" onClick={() => removeDownload(song.id)} title="Eliminar descarga">
+                          <ArrowDownCircle size={15} fill="#1db954" color="black" />
+                        </button>
+                      ) : (
+                        <button className="song-download-btn" onClick={() => downloadSong(song)} title="Descargar canción">
+                          <ArrowDownCircle size={15} />
+                        </button>
+                      )}
+                    </div>
                     <button 
                       className={`song-like-btn ${isLiked ? 'liked' : ''}`}
                       onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
                     >
                       <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
                     </button>
-                    <span className="duration-text">3:45</span>
+                    <span className="duration-text">
+                      {song.duration ? `${Math.floor(song.duration / 60)}:${String(song.duration % 60).padStart(2, '0')}` : '3:45'}
+                    </span>
                     <button className="song-more-btn" onClick={(e) => e.stopPropagation()}>
                       <MoreHorizontal size={16} />
                     </button>

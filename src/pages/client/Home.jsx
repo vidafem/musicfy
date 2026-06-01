@@ -1,109 +1,81 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Pause, Heart, ChevronRight } from 'lucide-react';
+import { Play, Pause, Heart, WifiOff, Download, Check, RefreshCw } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSettingsStore } from '../../store/useSettingsStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useOfflineStore } from '../../store/useOfflineStore';
+import { recommendationEngine } from '../../utils/recommendationEngine';
 import './Home.css';
 
-/**
- * PÁGINA DE INICIO - DISEÑO ESTILO SPOTIFY
- * 
- * Características:
- * - Fondo dinámico que cambia según el artista destacado
- * - Playlists inteligentes agrupadas por artista
- * - Solo contenido personalizado (sin todas las canciones)
- * - Alternancia de fotos y nombres en playlists
- */
 export default function Home() {
   const queue = usePlayerStore(state => state.queue);
   const currentSong = usePlayerStore(state => state.currentSong);
   const isPlaying = usePlayerStore(state => state.isPlaying);
   const playSong = usePlayerStore(state => state.playSong);
   const togglePlay = usePlayerStore(state => state.togglePlay);
-  const playbackHistory = usePlayerStore(state => state.playbackHistory);
-  
+
+  const playlists = useLibraryStore(state => state.playlists);
   const likedSongs = useLibraryStore(state => state.likedSongs);
   const toggleLike = useLibraryStore(state => state.toggleLike);
+  const fetchPlaylists = useLibraryStore(state => state.fetchPlaylists);
 
-  // Estado para alternar fotos/nombres en artistas
-  const [artistDisplayMode, setArtistDisplayMode] = useState({});
+  const isOfflineMode = useOfflineStore(state => state.isOfflineMode);
+  const isNetworkOnline = useOfflineStore(state => state.isNetworkOnline);
+  const downloadedIds = useOfflineStore(state => state.downloadedIds);
+  const downloadedMetadata = useOfflineStore(state => state.downloadedMetadata);
+  const downloadSong = useOfflineStore(state => state.downloadSong);
+  const removeDownload = useOfflineStore(state => state.removeDownload);
 
-  // ==========================================
-  // LÓGICA INTELIGENTE: Agrupar por artista
-  // ==========================================
-  const artistPlaylists = useMemo(() => {
-    if (!queue.length) return [];
+  // Inicializar playlists si no hay
+  useEffect(() => {
+    fetchPlaylists();
+  }, [fetchPlaylists]);
 
-    // Agrupar canciones por artista
-    const grouped = {};
-    queue.forEach(song => {
-      if (!grouped[song.artist]) {
-        grouped[song.artist] = [];
-      }
-      grouped[song.artist].push(song);
-    });
-
-    // Convertir a array y ordenar por cantidad de canciones (artistas más escuchados primero)
-    return Object.entries(grouped)
-      .map(([artist, songs]) => ({
-        artist,
-        songs: songs.slice(0, 6), // Mostrar máximo 6 canciones por artista
-        totalSongs: songs.length,
-        coverUrl: songs[0]?.cover_url, // Usar la portada del primer track
-        backgroundUrl: songs[0]?.background_url // Para el fondo dinámico
-      }))
-      .sort((a, b) => {
-        // Priorizar artistas escuchados recientemente
-        const aRecent = playbackHistory.filter(s => s.artist === a.artist).length;
-        const bRecent = playbackHistory.filter(s => s.artist === b.artist).length;
-        return bRecent - aRecent;
-      })
-      .slice(0, 8); // Mostrar máximo 8 artistas
-  }, [queue, playbackHistory]);
-
-  // ==========================================
-  // RECOMENDACIONES: Basadas en canciones más escuchadas
-  // ==========================================
-  const recommendations = useMemo(() => {
-    if (!playbackHistory.length) return queue.slice(0, 8);
-
-    // Contar frecuencia de canciones
-    const songFreq = {};
-    playbackHistory.forEach(song => {
-      songFreq[song.id] = (songFreq[song.id] || 0) + 1;
-    });
-
-    // Ordenar por frecuencia
-    return queue
-      .filter(song => songFreq[song.id])
-      .sort((a, b) => (songFreq[b.id] || 0) - (songFreq[a.id] || 0))
-      .slice(0, 8);
-  }, [playbackHistory, queue]);
-
-  // ==========================================
-  // FAVORITOS: Canciones marcadas con corazón
-  // ==========================================
-  const favoritesSongs = useMemo(() => {
-    return queue.filter(song => likedSongs.includes(song.id)).slice(0, 8);
-  }, [queue, likedSongs]);
-
-  // ==========================================
-  // FONDO DINÁMICO
-  // ==========================================
-  const dynamicBackground = useMemo(() => {
-    // Usar background_url de la canción actual o del artista destacado
-    if (currentSong?.background_url) {
-      return currentSong.background_url;
+  // Selección de canciones candidato: si está en offline, usamos SOLO las descargadas
+  const allSongs = useMemo(() => {
+    if (isOfflineMode) {
+      return downloadedMetadata;
     }
-    if (artistPlaylists.length > 0 && artistPlaylists[0].backgroundUrl) {
-      return artistPlaylists[0].backgroundUrl;
-    }
-    return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-  }, [currentSong, artistPlaylists]);
+    return queue;
+  }, [isOfflineMode, downloadedMetadata, queue]);
 
-  // ==========================================
-  // HANDLERS
-  // ==========================================
+  // Saludo dinámico según la hora
+  const greeting = useMemo(() => recommendationEngine.getGreeting(), []);
+
+  // 6 Accesos rápidos de la rejilla superior
+  const topGrid = useMemo(() => {
+    return recommendationEngine.getTopGrid(allSongs, likedSongs, playlists);
+  }, [allSongs, likedSongs, playlists]);
+
+  // Mixes dinámicos
+  const mixes = useMemo(() => {
+    return recommendationEngine.getMixes(allSongs);
+  }, [allSongs]);
+
+  // Escuchado recientemente
+  const recentlyPlayed = useMemo(() => {
+    return recommendationEngine.getRecentlyPlayed(allSongs);
+  }, [allSongs]);
+
+  // Canciones recomendadas
+  const recommendedTracks = useMemo(() => {
+    return recommendationEngine.getRecommendedTracks(allSongs, likedSongs);
+  }, [allSongs, likedSongs]);
+
+  // Handler para reproducir un grupo de canciones (Mixes / Playlists)
+  const handlePlayMix = (mixSongs) => {
+    if (!mixSongs || mixSongs.length === 0) return;
+    
+    // Si la canción actual ya está en este mix y está pausada, reanudar
+    const hasCurrent = mixSongs.some(s => s.id === currentSong?.id);
+    if (hasCurrent) {
+      togglePlay();
+    } else {
+      // Reproducir la primera canción del mix y cargar el mix como cola de reproducción
+      playSong(mixSongs[0]);
+      usePlayerStore.getState().setQueue(mixSongs);
+    }
+  };
+
   const handleSongClick = (song) => {
     if (currentSong?.id === song.id) {
       togglePlay();
@@ -112,170 +84,92 @@ export default function Home() {
     }
   };
 
-  const toggleArtistMode = (artist) => {
-    setArtistDisplayMode(prev => ({
-      ...prev,
-      [artist]: !prev[artist]
-    }));
-  };
-
-  // ==========================================
-  // RENDER
-  // ==========================================
   return (
-    <div className="home-page">
-      {/* Fondo dinámico con gradiente */}
-      <div 
-        className="home-hero-background" 
-        style={{
-          backgroundImage: typeof dynamicBackground === 'string'
-            ? dynamicBackground.includes('linear')
-              ? dynamicBackground
-              : `url('${dynamicBackground}')`
-            : 'none',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }}
-      >
-        <div className="home-hero-overlay"></div>
-      </div>
+    <div className="spotify-home-page">
+      {/* Banner de Modo Offline */}
+      {isOfflineMode && (
+        <div className="offline-banner">
+          <WifiOff size={16} />
+          <span>Estás en Modo Offline. Solo se muestra la música descargada.</span>
+        </div>
+      )}
 
-      {/* Contenido principal */}
-      <div className="home-content-scroll">
-        {/* SECCIÓN: REPRODUCIENDO AHORA */}
-        {currentSong && (
-          <section className="home-hero-section">
-            <div className="home-hero-content">
-              <div className="home-hero-cover">
-                <img src={currentSong.cover_url} alt={currentSong.title} />
-                <button 
-                  className="home-hero-play-btn"
-                  onClick={() => togglePlay()}
+      <div className="home-content-scroll scrollbar-hidden">
+        {/* Encabezado con Saludo */}
+        <header className="home-header-spotify">
+          <h1 className="greeting-title">{greeting}</h1>
+        </header>
+
+        {/* Rejilla Superior de 6 Accesos Rápidos */}
+        <section className="top-grid-section">
+          <div className="spotify-grid">
+            {topGrid.map((item) => {
+              const hasSongs = item.songs && item.songs.length > 0;
+              const isPlayingHere = isPlaying && item.songs.some(s => s.id === currentSong?.id);
+
+              return (
+                <div 
+                  key={item.id} 
+                  className={`grid-card ${isPlayingHere ? 'playing' : ''}`}
+                  onClick={() => hasSongs && handlePlayMix(item.songs)}
                 >
-                  {isPlaying ? <Pause size={32} fill="white" /> : <Play size={32} fill="white" />}
-                </button>
-              </div>
-              <div className="home-hero-info">
-                <span className="home-label">REPRODUCIENDO AHORA</span>
-                <h1 className="home-current-title">{currentSong.title}</h1>
-                <p className="home-current-artist">{currentSong.artist}</p>
-                <button 
-                  className={`home-like-btn ${likedSongs.includes(currentSong.id) ? 'liked' : ''}`}
-                  onClick={() => toggleLike(currentSong.id)}
-                >
-                  <Heart size={20} fill={likedSongs.includes(currentSong.id) ? 'currentColor' : 'none'} />
-                  {likedSongs.includes(currentSong.id) ? 'Te encanta' : 'Me encanta'}
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* SECCIÓN: ARTISTAS DESTACADOS */}
-        {artistPlaylists.length > 0 && (
-          <section className="home-section">
-            <h2 className="home-section-title">Tus Artistas Favoritos</h2>
-            <div className="home-artists-grid">
-              {artistPlaylists.map((playlist) => {
-                const showCover = artistDisplayMode[playlist.artist] ?? true;
-                return (
-                  <div 
-                    key={playlist.artist} 
-                    className="home-artist-card"
-                    onClick={() => toggleArtistMode(playlist.artist)}
-                  >
-                    <div className={`home-artist-visual ${showCover ? 'show-cover' : 'show-name'}`}>
-                      {showCover ? (
-                        <>
-                          <img src={playlist.coverUrl} alt={playlist.artist} className="home-artist-cover" />
-                          <div className="home-artist-overlay"></div>
-                        </>
-                      ) : (
-                        <div className="home-artist-name-display">
-                          <h3>{playlist.artist}</h3>
-                          <span>{playlist.totalSongs} canciones</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="home-artist-footer">
-                      <span className="home-artist-title">{playlist.artist}</span>
-                      <ChevronRight size={18} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* SECCIÓN: CANCIONES RECOMENDADAS (Basadas en reproducción) */}
-        {recommendations.length > 0 && (
-          <section className="home-section">
-            <h2 className="home-section-title">Recomendado Para Ti</h2>
-            <div className="home-songs-carousel">
-              {recommendations.map((song) => {
-                const isActive = currentSong?.id === song.id;
-                return (
-                  <div
-                    key={song.id}
-                    className={`home-song-card ${isActive ? 'active' : ''}`}
-                    onClick={() => handleSongClick(song)}
-                  >
-                    <div className="home-song-cover-wrapper">
-                      <img src={song.cover_url} alt={song.title} className="home-song-cover" />
-                      <div className="home-song-play-overlay">
-                        {isActive && isPlaying ? (
-                          <div className="home-mini-bars">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                          </div>
-                        ) : (
-                          <Play size={20} fill="white" />
-                        )}
+                  <div className="grid-card-left">
+                    {item.type === 'liked' ? (
+                      <div className="liked-gradient-box">
+                        <Heart size={20} fill="white" color="white" />
                       </div>
-                    </div>
-                    <div className="home-song-info">
-                      <h4 className="home-song-title">{song.title}</h4>
-                      <p className="home-song-artist">{song.artist}</p>
-                    </div>
+                    ) : item.coverUrl ? (
+                      <img src={item.coverUrl} alt="" className="grid-card-cover" />
+                    ) : (
+                      <div className="grid-card-placeholder">🎵</div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                  <div className="grid-card-right">
+                    <span className="grid-card-title">{item.title}</span>
+                    {hasSongs && (
+                      <button className="grid-play-bubble">
+                        {isPlayingHere ? (
+                          <Pause size={14} fill="black" color="black" />
+                        ) : (
+                          <Play size={14} fill="black" color="black" style={{ marginLeft: '2px' }} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-        {/* SECCIÓN: TUS FAVORITOS */}
-        {favoritesSongs.length > 0 && (
-          <section className="home-section">
-            <h2 className="home-section-title">Tus Favoritos ❤️</h2>
-            <div className="home-songs-list">
-              {favoritesSongs.map((song, index) => {
-                const isActive = currentSong?.id === song.id;
+        {/* Carrusel 1: Mixes Recomendados */}
+        {mixes.length > 0 && (
+          <section className="home-section-spotify">
+            <h2 className="section-title-spotify">Tus mixes diarios</h2>
+            <div className="horizontal-scroll scrollbar-hidden">
+              {mixes.map((mix) => {
+                const isPlayingHere = isPlaying && mix.songs.some(s => s.id === currentSong?.id);
+
                 return (
-                  <div
-                    key={song.id}
-                    className={`home-list-item ${isActive ? 'active' : ''}`}
-                    onClick={() => handleSongClick(song)}
-                  >
-                    <span className="home-list-index">{index + 1}</span>
-                    <div className="home-list-cover">
-                      <img src={song.cover_url} alt={song.title} />
+                  <div key={mix.id} className="scroll-card">
+                    <div className="scroll-card-cover-wrapper" onClick={() => handlePlayMix(mix.songs)}>
+                      {mix.coverUrl ? (
+                        <img src={mix.coverUrl} alt={mix.title} className="scroll-card-cover" />
+                      ) : (
+                        <div className="scroll-card-placeholder">🎵</div>
+                      )}
+                      <button className={`card-play-bubble ${isPlayingHere ? 'visible' : ''}`}>
+                        {isPlayingHere ? (
+                          <Pause size={18} fill="black" color="black" />
+                        ) : (
+                          <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
+                        )}
+                      </button>
                     </div>
-                    <div className="home-list-info">
-                      <h4 className="home-list-title">{song.title}</h4>
-                      <p className="home-list-artist">{song.artist}</p>
+                    <div className="scroll-card-info">
+                      <h4 className="scroll-card-title">{mix.title}</h4>
+                      <p className="scroll-card-desc">{mix.description}</p>
                     </div>
-                    <button
-                      className={`home-list-like ${likedSongs.includes(song.id) ? 'liked' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLike(song.id);
-                      }}
-                    >
-                      <Heart size={16} fill={likedSongs.includes(song.id) ? 'currentColor' : 'none'} />
-                    </button>
                   </div>
                 );
               })}
@@ -283,12 +177,88 @@ export default function Home() {
           </section>
         )}
 
-        {/* MENSAJE VACÍO */}
-        {queue.length === 0 && (
-          <div className="home-empty-state">
-            <div className="home-empty-icon">🎵</div>
-            <h3>Aquí no hay nada todavía</h3>
-            <p>Sube tus primeras canciones desde el panel de administración</p>
+        {/* Carrusel 2: Escuchado Recientemente */}
+        {recentlyPlayed.length > 0 && (
+          <section className="home-section-spotify">
+            <h2 className="section-title-spotify">Escuchado recientemente</h2>
+            <div className="horizontal-scroll scrollbar-hidden">
+              {recentlyPlayed.map((song) => {
+                const isActive = currentSong?.id === song.id;
+                const isDownloaded = downloadedIds.includes(song.id);
+
+                return (
+                  <div key={song.id} className={`scroll-card ${isActive ? 'active' : ''}`}>
+                    <div className="scroll-card-cover-wrapper" onClick={() => handleSongClick(song)}>
+                      <img src={song.cover_url} alt="" className="scroll-card-cover" />
+                      <button className={`card-play-bubble ${isActive && isPlaying ? 'visible' : ''}`}>
+                        {isActive && isPlaying ? (
+                          <Pause size={18} fill="black" color="black" />
+                        ) : (
+                          <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
+                        )}
+                      </button>
+                    </div>
+                    <div className="scroll-card-info">
+                      <h4 className="scroll-card-title flex-title">
+                        {song.title}
+                        {isDownloaded && <span className="green-dl-dot" title="Descargado offline">▼</span>}
+                      </h4>
+                      <p className="scroll-card-desc">{song.artist}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Carrusel 3: Recomendado Para Ti */}
+        {recommendedTracks.length > 0 && (
+          <section className="home-section-spotify">
+            <h2 className="section-title-spotify flex-header-inline">
+              <span>Recomendados para hoy</span>
+            </h2>
+            <div className="horizontal-scroll scrollbar-hidden">
+              {recommendedTracks.map((song) => {
+                const isActive = currentSong?.id === song.id;
+                const isDownloaded = downloadedIds.includes(song.id);
+
+                return (
+                  <div key={song.id} className={`scroll-card ${isActive ? 'active' : ''}`}>
+                    <div className="scroll-card-cover-wrapper" onClick={() => handleSongClick(song)}>
+                      <img src={song.cover_url} alt="" className="scroll-card-cover" />
+                      <button className={`card-play-bubble ${isActive && isPlaying ? 'visible' : ''}`}>
+                        {isActive && isPlaying ? (
+                          <Pause size={18} fill="black" color="black" />
+                        ) : (
+                          <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
+                        )}
+                      </button>
+                    </div>
+                    <div className="scroll-card-info">
+                      <h4 className="scroll-card-title flex-title">
+                        {song.title}
+                        {isDownloaded && <span className="green-dl-dot" title="Descargado offline">▼</span>}
+                      </h4>
+                      <p className="scroll-card-desc">{song.artist}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Caso en que no haya canciones en la base de datos */}
+        {allSongs.length === 0 && (
+          <div className="home-empty-spotify">
+            <div className="empty-musical-note">🎵</div>
+            <h3>No hay música disponible</h3>
+            {isOfflineMode ? (
+              <p>No tienes canciones descargadas para escuchar offline. Ve a tu configuración o conéctate a internet.</p>
+            ) : (
+              <p>Puedes subir canciones y configurar carátulas en tu panel de administración.</p>
+            )}
           </div>
         )}
       </div>
