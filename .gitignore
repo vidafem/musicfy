@@ -27,3 +27,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Custom ignores
+server/node_modules
+server/yt-dlp.exe
+scratch/

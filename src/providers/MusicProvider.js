@@ -1,6 +1,8 @@
 import { supabase } from '../supabaseClient'
+import { getHighResThumbnail } from '../utils/pipedService'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'
 
 // Bandera de autocuración de esquema para evitar HTTP 400 en consola de red
 let dbSchemaSupportsSource = true;
@@ -118,25 +120,38 @@ export const YouTubeProvider = {
   name: 'youtube',
   
   async search(query, limit = 10) {
-    // El Worker de Cloudflare hace de proxy para la YouTube Data API / Piped
-    const res = await fetch(`${WORKER_URL}/youtube/search?q=${encodeURIComponent(query)}&limit=${limit}`)
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data.items || []).map(normalizeYouTube)
+    try {
+      const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+      if (!res.ok) return []
+      const data = await res.json()
+      return (data.items || []).map(normalizeYouTube)
+    } catch (e) {
+      console.error('[YouTubeProvider] Error al buscar:', e)
+      return []
+    }
   },
   
   async getStreamUrl(youtubeId) {
-    // El Worker devuelve una URL de stream segura (sin exponer API key)
-    const res = await fetch(`${WORKER_URL}/youtube/stream/${youtubeId}`)
-    if (!res.ok) throw new Error('No se pudo obtener la URL del stream')
-    const { url } = await res.json()
-    return url
+    try {
+      const res = await fetch(`${BACKEND_URL}/stream?id=${youtubeId}`)
+      if (!res.ok) throw new Error('No se pudo obtener la URL del stream')
+      const { url } = await res.json()
+      return url
+    } catch (e) {
+      console.error('[YouTubeProvider] Error al obtener stream:', e)
+      throw e
+    }
   },
   
   async getMetadata(youtubeId) {
-    const res = await fetch(`${WORKER_URL}/youtube/metadata/${youtubeId}`)
-    if (!res.ok) return null
-    return res.json()
+    // Si no está soportado en backend, retornar null o consultar metadata
+    try {
+      const res = await fetch(`${BACKEND_URL}/metadata/${youtubeId}`)
+      if (!res.ok) return null
+      return res.json()
+    } catch {
+      return null
+    }
   }
 }
 
@@ -184,7 +199,7 @@ function normalizeYouTube(item) {
     title: item.snippet.title,
     artist: item.snippet.channelTitle,
     album: '',
-    cover_url: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+    cover_url: getHighResThumbnail(item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url),
     url: null,  // Se obtiene en tiempo real via getPlayableUrl
     youtube_id: item.id.videoId,
     source: 'youtube',

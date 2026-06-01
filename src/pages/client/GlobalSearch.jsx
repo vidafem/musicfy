@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Globe, Play, Heart, Loader2, Music } from 'lucide-react';
+import { Search, Globe, Play, Heart, Loader2, Music, MoreVertical } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
-import { fetchFromPiped, getStreamUrlEndpoint } from '../../utils/pipedService';
+import { fetchFromPiped } from '../../utils/pipedService';
 import './GlobalSearch.css';
 
 /**
@@ -17,7 +17,7 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const { playSong, currentSong, isPlaying, togglePlay } = usePlayerStore();
+  const { playSong, currentSong, isPlaying, togglePlay, setActiveSongMenu } = usePlayerStore();
   const { likedSongs, toggleLike } = useLibraryStore();
 
   const handleSearch = async (e) => {
@@ -32,16 +32,21 @@ export default function GlobalSearch() {
       const data = await fetchFromPiped(`/search?q=${encodeURIComponent(query)}&filter=music_videos`);
       
       // Mapeamos los resultados al formato que entiende nuestra app
-      const formattedResults = (data.items || []).map(item => ({
-        id: item.url.split('=')[1] || item.url.split('/').pop(), // ID de YouTube
-        title: item.title,
-        artist: item.uploaderName,
-        cover_url: item.thumbnail,
-        // Generamos una URL de streaming directa (esto es lo que permite reproducir sin anuncios)
-        url: getStreamUrlEndpoint(item.url.split('=')[1] || item.url.split('/').pop()),
-        is_external: true, // Marca para saber que viene de YouTube
-        duration_text: item.duration ? Math.floor(item.duration / 60) + ":" + (item.duration % 60).toString().padStart(2, '0') : ''
-      }));
+      const formattedResults = (data.items || []).map(item => {
+        const yid = item.url.split('=')[1] || item.url.split('/').pop();
+        return {
+          id: yid, // ID de YouTube
+          title: item.title,
+          artist: item.uploaderName,
+          cover_url: item.thumbnail,
+          url: null, // Let usePlayerStore resolve the playable stream URL
+          source: 'youtube',
+          youtube_id: yid,
+          is_external: true, // Marca para saber que viene de YouTube
+          is_video: true, // En búsqueda global de música, marcar como video
+          duration_text: item.duration ? Math.floor(item.duration / 60) + ":" + (item.duration % 60).toString().padStart(2, '0') : ''
+        };
+      });
 
       setResults(formattedResults);
     } catch (error) {
@@ -51,32 +56,12 @@ export default function GlobalSearch() {
     }
   };
 
-  const handlePlay = async (song) => {
+  const handlePlay = (song) => {
     if (currentSong?.id === song.id) {
       togglePlay();
       return;
     }
-
-    // Para obtener la URL real del stream (mp3/webm) necesitamos hacer un fetch al stream info
-    setLoading(true);
-    try {
-        const data = await fetchFromPiped(`/streams/${song.id}`);
-        
-        // Buscamos el stream de audio con mejor calidad
-        const audioStream = data.audioStreams.find(s => s.format === 'M4A' || s.format === 'WEBM') || data.audioStreams[0];
-        
-        if (audioStream) {
-            playSong({
-                ...song,
-                url: audioStream.url // La URL real del audio
-            });
-        }
-    } catch (err) {
-        console.error("Error cargando stream:", err);
-        alert("No se pudo cargar el audio de esta canción. Intenta con otra.");
-    } finally {
-        setLoading(false);
-    }
+    playSong(song);
   };
 
   return (
@@ -146,12 +131,22 @@ export default function GlobalSearch() {
                     <p>{song.artist}</p>
                   </div>
                   
-                  <button 
-                    className={`gs-like-btn ${isLiked ? 'liked' : ''}`}
-                    onClick={() => toggleLike(song.id, song)}
-                  >
-                    <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
-                  </button>
+                  <div className="gs-card-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button 
+                      className={`gs-like-btn ${isLiked ? 'liked' : ''}`}
+                      onClick={() => toggleLike(song)}
+                      style={{ padding: '6px' }}
+                    >
+                      <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
+                    </button>
+                    <button 
+                      className="gs-options-btn"
+                      onClick={() => setActiveSongMenu(song)}
+                      style={{ background: 'transparent', border: 'none', color: '#b3b3b3', cursor: 'pointer', padding: '6px' }}
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

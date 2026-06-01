@@ -234,3 +234,334 @@
         grid-template-columns: repeat(4, 1fr);
     }
 }
+
+/* Nuevos estilos para badges de origen de búsqueda */
+.song-title.local-title {
+    color: #ffffff !important;
+}
+
+.song-title.youtube-title {
+    color: #ffffff !important;
+}
+
+.l-badge {
+    background: #0070f3;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.yt-badge {
+    background: #ff0000;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 1px 4px;
+    border-radius: 4px;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.song-options-btn {
+    background: transparent;
+    border: none;
+    color: #b3b3b3;
+    cursor: pointer;
+    padding: 10px;
+    transition: color 0.2s;
+}
+
+.song-options-btn:hover {
+    color: white;
+}
+
+/* ==================================
+   ÁLBUMES Y PLAYLISTS DE YOUTUBE CAROUSEL
+   ================================== */
+.external-playlists-section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.section-subtitle {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 10px 0 15px 0;
+    color: #e5e5e5;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.external-playlists-carousel {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.external-playlists-carousel::-webkit-scrollbar {
+    height: 4px;
+}
+
+.external-playlists-carousel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.external-playlist-card {
+    display: flex;
+    flex-direction: column;
+    width: 140px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.external-playlist-card:hover {
+    transform: scale(1.04);
+}
+
+.card-cover-wrapper {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    background: #121212;
+}
+
+.card-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.card-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.card-info {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.card-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-author {
+    font-size: 0.75rem;
+    color: #b3b3b3;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-tracks {
+    font-size: 0.7rem;
+    color: var(--accent-color, #1db954);
+    font-weight: 600;
+}
+
+/* ==================================
+   GUSTOS: CANTANTES PERSONALIZADOS
+   ================================== */
+.explore-artists-block {
+    margin-bottom: 25px;
+}
+
+.explore-artists-grid {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 8px 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.explore-artists-grid::-webkit-scrollbar {
+    height: 4px;
+}
+
+.explore-artists-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.explore-artist-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 90px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.explore-artist-card:hover {
+    transform: scale(1.06);
+}
+
+.artist-avatar-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.08);
+    background: #181818;
+}
+
+.artist-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.artist-avatar-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+    color: #e5e5e5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+/* ==================================
+   HISTORIAL DE BÚSQUEDAS RECIENTES
+   ================================== */
+.search-history-section {
+    margin-bottom: 30px;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.clear-history-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 4px 8px;
+}
+
+.clear-history-btn:hover {
+    color: var(--accent-color, #1db954);
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.history-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.history-img-song {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.history-img-playlist {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.history-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.history-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-subtitle {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.remove-history-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.remove-history-btn:hover {
+    color: white;
+    background: rgba(255,255,255,0.1);
+}

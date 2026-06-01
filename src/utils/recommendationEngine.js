@@ -8,8 +8,12 @@ const PROFILE_KEY = 'musicfy_taste_profile';
 
 export const recommendationEngine = {
   // Registrar una reproducción de canción
-  recordPlay(songId, allSongs = []) {
-    if (!songId || allSongs.length === 0) return;
+  recordPlay(songOrId, allSongs = []) {
+    if (!songOrId) return;
+
+    const song = typeof songOrId === 'object' ? songOrId : (allSongs.find(s => s.id === songOrId) || null);
+    const songId = song ? song.id : songOrId;
+    if (!songId) return;
 
     // 1. Cargar historial
     let history = [];
@@ -20,8 +24,11 @@ export const recommendationEngine = {
       history = [];
     }
 
+    // Quitar duplicados previos
+    history = history.filter(item => item.songId !== songId);
+
     // Agregar nueva entrada al inicio
-    history.unshift({ songId, timestamp: Date.now() });
+    history.unshift({ songId, song, timestamp: Date.now() });
     
     // Limitar el historial a 100 elementos
     history = history.slice(0, 100);
@@ -33,13 +40,13 @@ export const recommendationEngine = {
     const genreCounts = {};
 
     history.forEach(item => {
-      const song = songMap.get(item.songId);
-      if (song) {
-        if (song.artist) {
-          artistCounts[song.artist] = (artistCounts[song.artist] || 0) + 1;
+      const currentSong = songMap.get(item.songId) || item.song;
+      if (currentSong) {
+        if (currentSong.artist && currentSong.artist !== 'Artista Desconocido') {
+          artistCounts[currentSong.artist] = (artistCounts[currentSong.artist] || 0) + 1;
         }
-        if (song.genre) {
-          genreCounts[song.genre] = (genreCounts[song.genre] || 0) + 1;
+        if (currentSong.genre) {
+          genreCounts[currentSong.genre] = (genreCounts[currentSong.genre] || 0) + 1;
         }
       }
     });
@@ -108,7 +115,10 @@ export const recommendationEngine = {
     
     // Obtener las últimas canciones únicas de historial
     const uniqueHistoryIds = [...new Set(history.map(h => h.songId))].slice(0, 20);
-    const recentSongs = uniqueHistoryIds.map(id => songMap.get(id)).filter(Boolean);
+    const recentSongs = uniqueHistoryIds.map(id => {
+      const histItem = history.find(h => h.songId === id);
+      return songMap.get(id) || histItem?.song;
+    }).filter(Boolean);
 
     gridItems.push({
       id: 'recently_played',
@@ -284,7 +294,7 @@ export const recommendationEngine = {
     const seen = new Set();
 
     history.forEach(item => {
-      const song = songMap.get(item.songId);
+      const song = songMap.get(item.songId) || item.song;
       if (song && !seen.has(song.id)) {
         seen.add(song.id);
         list.push(song);

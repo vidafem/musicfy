@@ -1,0 +1,16 @@
+{
+  "name": "musicfy-backend",
+  "version": "1.0.0",
+  "description": "Backend de retransmisión y búsqueda de YouTube Music para Musicfy",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "youtube-music-api": "^1.0.6"
+  }
+}

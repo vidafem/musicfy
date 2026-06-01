@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Settings, Globe, Play, Pause, Activity } from 'lucide-react';
 import SettingsSidebar from '../components/SettingsSidebar';
 import PlayerBar from '../components/PlayerBar';
+import SongMenu from '../components/SongMenu';
 import GlassButtonWrapper from '../components/ui/GlassButtonWrapper';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -232,6 +233,7 @@ export default function ClientLayout() {
 
       <PlayerBar mobileDockMode={mobileDockMode} onMobileDockModeChange={setMobileDockMode} />
       <SettingsSidebar isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SongMenu />
 
       <main className="main-content">
         <Routes>

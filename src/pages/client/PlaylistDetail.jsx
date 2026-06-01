@@ -16,6 +16,7 @@ export default function PlaylistDetail() {
   const currentSong = usePlayerStore(state => state.currentSong);
   const isPlaying = usePlayerStore(state => state.isPlaying);
   const playSong = usePlayerStore(state => state.playSong);
+  const setActiveSongMenu = usePlayerStore(state => state.setActiveSongMenu);
 
   const playlists = useLibraryStore(state => state.playlists);
   const likedSongs = useLibraryStore(state => state.likedSongs);
@@ -32,7 +33,33 @@ export default function PlaylistDetail() {
   const removeDownload = useOfflineStore(state => state.removeDownload);
   const downloadPlaylist = useOfflineStore(state => state.downloadPlaylist);
 
-  const playlist = useMemo(() => playlists.find(p => p.id === id), [playlists, id]);
+  const isUuid = useMemo(() => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id), [id]);
+  const [externalPlaylist, setExternalPlaylist] = useState(null);
+  const [externalLoading, setExternalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isUuid && id) {
+      setExternalLoading(true);
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+      fetch(`${BACKEND_URL}/playlist/tracks?id=${id}`)
+        .then(res => res.json())
+        .then(data => {
+          setExternalPlaylist({
+            id: id,
+            title: data.title,
+            cover_url: data.cover_url,
+            songs: data.tracks || [],
+            is_external: true
+          });
+        })
+        .catch(err => console.error("Error loading external playlist:", err))
+        .finally(() => setExternalLoading(false));
+    }
+  }, [id, isUuid]);
+
+  const playlist = useMemo(() => {
+    return isUuid ? playlists.find(p => p.id === id) : externalPlaylist;
+  }, [playlists, id, isUuid, externalPlaylist]);
 
   // Checar si toda la playlist está descargada
   const isPlaylistDownloaded = useMemo(() => {
@@ -98,14 +125,18 @@ export default function PlaylistDetail() {
         }}
       >
         <div className="header-background">
-          {playlist.songs.slice(0, 4).map((song, i) => (
-            <img key={i} src={song.cover_url} alt="" className={`bg-tile tile-${i}`} />
-          ))}
+          {playlist.is_external ? (
+            <div className="bg-tile tile-0" style={{ backgroundImage: `url(${playlist.cover_url})`, width: '100%', height: '100%', filter: 'blur(50px) brightness(0.4)', backgroundSize: 'cover', position: 'absolute', inset: 0 }}></div>
+          ) : (
+            playlist.songs.slice(0, 4).map((song, i) => (
+              <img key={i} src={song.cover_url} alt="" className={`bg-tile tile-${i}`} />
+            ))
+          )}
           <div className="header-overlay"></div>
         </div>
 
         <nav className="header-nav" style={{ opacity: 1, transform: `translateY(${-scrollY * 0.4}px)` }}>
-          <button className="back-btn" onClick={() => navigate('/library')}>
+          <button className="back-btn" onClick={() => navigate(-1)}>
             <ArrowLeft size={24} />
           </button>
         </nav>
@@ -113,22 +144,26 @@ export default function PlaylistDetail() {
         <div className="header-content">
           <div className="playlist-cover-art">
             {playlist.songs.length > 0 ? (
+              playlist.is_external ? (
+                <img src={playlist.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
+              ) : (
                 <div className="cover-grid">
-                    {playlist.songs.slice(0, 4).map((s, i) => (
-                        <img key={i} src={s.cover_url} alt="" />
-                    ))}
+                  {playlist.songs.slice(0, 4).map((s, i) => (
+                    <img key={i} src={s.cover_url} alt="" />
+                  ))}
                 </div>
+              )
             ) : (
-                <div className="cover-placeholder"><Music size={48} /></div>
+              <div className="cover-placeholder"><Music size={48} /></div>
             )}
           </div>
           
           <div className="playlist-info">
-            <span className="playlist-label">PLAYLIST</span>
+            <span className="playlist-label">{playlist.is_external ? 'YOUTUBE ALBUM / PLAYLIST' : 'PLAYLIST'}</span>
             <h1 className="playlist-title">{playlist.title}</h1>
             <div className="playlist-meta">
-              <div className="user-badge">M</div>
-              <span className="user-name">TU BIBLIOTECA</span>
+              <div className="user-badge">{playlist.is_external ? 'YT' : 'M'}</div>
+              <span className="user-name">{playlist.is_external ? 'YOUTUBE MUSIC' : 'TU BIBLIOTECA'}</span>
               <span className="dot">•</span>
               <span className="song-count">{playlist.songs.length} canciones</span>
             </div>
@@ -278,7 +313,7 @@ export default function PlaylistDetail() {
                     <span className="duration-text">
                       {song.duration ? `${Math.floor(song.duration / 60)}:${String(song.duration % 60).padStart(2, '0')}` : '3:45'}
                     </span>
-                    <button className="song-more-btn" onClick={(e) => e.stopPropagation()}>
+                    <button className="song-more-btn" onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}>
                       <MoreHorizontal size={16} />
                     </button>
                   </div>
@@ -288,7 +323,7 @@ export default function PlaylistDetail() {
           </div>
         </div>
 
-        {availableSongs.length > 0 && (
+        {availableSongs.length > 0 && !playlist.is_external && (
           <section className="recommendations-section">
             <h3>Recomendado</h3>
             <p>Basado en el título de esta playlist</p>

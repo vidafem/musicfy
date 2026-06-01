@@ -432,3 +432,44 @@
     right: 6px;
   }
 }
+
+/* Botón de opciones (tres puntos) en las tarjetas de carrusel */
+.card-options-bubble {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.scroll-card-cover-wrapper:hover .card-options-bubble {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.card-options-bubble:hover {
+  background-color: rgba(0, 0, 0, 0.85);
+  transform: scale(1.06) !important;
+}
+
+/* En móvil, mostrar el botón de tres puntos siempre visible para touch ux */
+@media (max-width: 768px) {
+  .card-options-bubble {
+    opacity: 0.85;
+    transform: translateY(0);
+  }
+}

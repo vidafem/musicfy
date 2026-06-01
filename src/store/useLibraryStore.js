@@ -107,25 +107,66 @@ export const useLibraryStore = create((set, get) => ({
         return song.id;
     }
 
-    // Check by URL or Title/Artist
-    const { data: existing } = await supabase
-        .from('songs')
-        .select('id')
-        .eq('url', song.url)
-        .maybeSingle();
+    const isYouTube = song.source === 'youtube' || song.is_external;
+    const yid = song.youtube_id || song.id;
 
-    if (existing) return existing.id;
+    // Check by youtube_id first for external tracks
+    if (isYouTube && yid) {
+      const { data: existing } = await supabase
+          .from('songs')
+          .select('id')
+          .eq('youtube_id', yid)
+          .maybeSingle();
+
+      if (existing) return existing.id;
+    }
+
+    // Check by URL or Title/Artist
+    if (song.url) {
+      const { data: existing } = await supabase
+          .from('songs')
+          .select('id')
+          .eq('url', song.url)
+          .maybeSingle();
+
+      if (existing) return existing.id;
+    }
+
+    // Descargar letras de LRCLib si es de YouTube
+    let lyrics = song.lyrics || null;
+    if (!lyrics && song.title) {
+      try {
+        const cleanArtist = song.artist && song.artist !== 'Artista Desconocido' ? song.artist : '';
+        let lrcUrl = cleanArtist 
+          ? `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(song.title)}`
+          : `https://lrclib.net/api/search?q=${encodeURIComponent(song.title)}`;
+        const res = await fetch(lrcUrl);
+        if (res.ok) {
+          const lrcData = await res.json();
+          if (lrcData && lrcData.length > 0) {
+            lyrics = lrcData[0].syncedLyrics || lrcData[0].plainLyrics || null;
+          }
+        }
+      } catch (e) {
+        console.warn("[ensureSongInDb] Error al pre-cargar letras de LRCLib:", e);
+      }
+    }
 
     // Insert new song
     const { data, error } = await supabase
         .from('songs')
         .insert([{
             title: song.title,
-            artist: song.artist,
-            url: song.url,
-            cover_url: song.cover_url,
+            artist: song.artist || 'Artista Desconocido',
+            url: song.url || (isYouTube ? `https://www.youtube.com/watch?v=${yid}` : 'local_file'),
+            cover_url: song.cover_url || '',
+            background_url: song.background_url || song.cover_url || '',
             duration: song.duration || 0,
-            lyrics: song.lyrics || '[Streaming]'
+            lyrics: lyrics || '[Streaming]',
+            source: isYouTube ? 'youtube' : (song.source || 'local'),
+            youtube_id: isYouTube ? yid : null,
+            is_video: song.is_video || false,
+            video_url: song.video_url || (isYouTube ? `https://www.youtube.com/watch?v=${yid}` : null)
         }])
         .select('id')
         .single();
@@ -184,6 +225,7 @@ export const useLibraryStore = create((set, get) => ({
 
       if (error) throw error;
 
+      // Update local state
       set((state) => ({
         playlists: state.playlists.map(p => {
           if (p.id === playlistId) {
@@ -192,6 +234,30 @@ export const useLibraryStore = create((set, get) => ({
           return p;
         })
       }));
+
+      // Garbage Collector Check: si es de youtube y ya no está en ninguna playlist ni likes, borrar de la tabla songs
+      const { data: songData } = await supabase
+        .from('songs')
+        .select('source')
+        .eq('id', songId)
+        .maybeSingle();
+
+      if (songData && songData.source === 'youtube') {
+        const { count: plCount } = await supabase
+          .from('playlist_songs')
+          .select('*', { count: 'exact', head: true })
+          .eq('song_id', songId);
+
+        const { count: likeCount } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('song_id', songId);
+
+        if ((plCount || 0) === 0 && (likeCount || 0) === 0) {
+          console.log(`[GC] Eliminando canción huérfana de YouTube de la DB: ${songId}`);
+          await supabase.from('songs').delete().eq('id', songId);
+        }
+      }
     } catch (error) {
       console.error('Error removing song from playlist:', error);
     }
@@ -239,6 +305,30 @@ export const useLibraryStore = create((set, get) => ({
         if (error) throw error;
 
         set({ likedSongs: likedSongs.filter(id => id !== songId) });
+
+        // Garbage Collector Check: si es de youtube y ya no está en ninguna playlist ni likes, borrar de la tabla songs
+        const { data: songData } = await supabase
+          .from('songs')
+          .select('source')
+          .eq('id', songId)
+          .maybeSingle();
+
+        if (songData && songData.source === 'youtube') {
+          const { count: plCount } = await supabase
+            .from('playlist_songs')
+            .select('*', { count: 'exact', head: true })
+            .eq('song_id', songId);
+
+          const { count: likeCount } = await supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('song_id', songId);
+
+          if ((plCount || 0) === 0 && (likeCount || 0) === 0) {
+            console.log(`[GC] Eliminando canción huérfana de YouTube (post-unlike) de la DB: ${songId}`);
+            await supabase.from('songs').delete().eq('id', songId);
+          }
+        }
       } else {
         // Add like
         // Ensure song is in DB first if it's an object

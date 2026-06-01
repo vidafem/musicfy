@@ -13,6 +13,7 @@ import { useLyrics } from '../hooks/useLyrics';
 import { useIdle } from '../hooks/useIdle';
 import './PlayerBar.css';
 import './PlayerError.css';
+import { initializeWebAudioNormalizer, resumeWebAudioContext } from '../services/player/audioNormalizer';
 
 const getYoutubeId = (url) => {
   if (!url) return null;
@@ -64,6 +65,15 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   const volumeHudTimerRef = useRef(null);
 
   const [showVideo, setShowVideo] = useState(false);
+
+  // Auto-activar modo video si la canción es un video
+  useEffect(() => {
+    if (currentSong) {
+      const isVideoSong = Boolean(currentSong.is_video || currentSong.video_url);
+      setShowVideo(isVideoSong);
+    }
+  }, [currentSong?.id]);
+
   const [ytPlayer, setYtPlayer] = useState(null);
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
   const videoRef = useRef(null);
@@ -106,7 +116,8 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   // Hook de Inactividad
   const isIdle = useIdle(isFullScreen, isPlaying);
 
-  const youtubeId = currentSong?.video_url ? getYoutubeId(currentSong.video_url) : null;
+  const youtubeId = currentSong?.source === 'youtube' ? currentSong.youtube_id : (currentSong?.video_url ? getYoutubeId(currentSong.video_url) : null);
+  const hasVideo = currentSong?.video_url || (currentSong?.source === 'youtube' && currentSong?.youtube_id);
 
   // Toggle fullscreen landscape mode for mobile video
   const toggleVideoFullscreen = useCallback(async () => {
@@ -207,15 +218,30 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
     loadAPI();
 
-    if (window.YT && window.YT.Player) {
-      initPlayer();
-    } else {
-      const previousCallback = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        if (previousCallback) previousCallback();
+    const checkAndInit = () => {
+      if (window.YT && window.YT.Player) {
         initPlayer();
-      };
-    }
+      } else {
+        // En SPA, el script puede haberse inyectado ya, por lo que onYouTubeIframeAPIReady no se dispara de nuevo.
+        // Hacemos polling complementario.
+        const interval = setInterval(() => {
+          if (window.YT && window.YT.Player) {
+            clearInterval(interval);
+            initPlayer();
+          }
+        }, 100);
+        setTimeout(() => clearInterval(interval), 10000);
+
+        // También respetamos el callback por si acaso
+        const previousCallback = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+          if (previousCallback) previousCallback();
+          initPlayer();
+        };
+      }
+    };
+
+    checkAndInit();
 
     return () => {
       active = false;
@@ -391,6 +417,9 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
   useEffect(() => {
     fetchSongs();
+    if (audioARef.current && audioBRef.current) {
+      initializeWebAudioNormalizer(audioARef.current, audioBRef.current);
+    }
     if (user?.id) return initConnect(user.id);
   }, [user?.id]);
 
@@ -400,20 +429,31 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     return () => clearInterval(interval);
   }, [isPlaying, isMasterDevice, broadcastState]);
 
-  // --- PRE-FETCHING (Carga anticipada de la siguiente canción) ---
+  // --- GAPLESS PRE-BUFFERING (Carga anticipada del buffer en canal inactivo) ---
   useEffect(() => {
-    if (duration > 0 && (duration - currentTime < 15)) {
-      const currentIndex = queue.findIndex(s => s.id === currentSong?.id);
-      const nextSong = queue[currentIndex + 1];
-      if (nextSong && nextSong.url) {
-        const link = document.createElement('link');
-        link.rel = 'prefetch';
-        link.href = nextSong.url;
-        link.as = 'audio';
-        document.head.appendChild(link);
+    if (!currentSong || queue.length === 0 || !isMasterDevice || !isPlaying) return;
+    
+    const timeLeft = duration - currentTime;
+    if (duration > 0 && timeLeft < 15 && timeLeft > 5) {
+      const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+      if (currentIndex !== -1 && currentIndex < queue.length - 1) {
+        const nextSong = queue[currentIndex + 1];
+        const secAudio = activeChannel === 'A' ? audioBRef.current : audioARef.current;
+        
+        if (secAudio && !isMixingRef.current && (!secAudio.src || !secAudio.src.includes(nextSong.id))) {
+          import('../providers/MusicProvider').then(({ HybridMusicProvider }) => {
+            HybridMusicProvider.getPlayableUrl(nextSong).then(url => {
+              if (url && secAudio.src !== url) {
+                console.log('[Gapless Preload] Precargando buffer de:', nextSong.title);
+                secAudio.src = url;
+                secAudio.load(); // Iniciar buffer silenciosamente
+              }
+            }).catch(e => console.warn(e));
+          });
+        }
       }
     }
-  }, [currentTime, duration, queue, currentSong]);
+  }, [currentTime, duration, queue, currentSong?.id, activeChannel, isMasterDevice, isPlaying]);
 
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
@@ -451,7 +491,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
       <div
         ref={playerContainerRef}
-        className={`fullscreen-tv-player ${isFullScreen ? 'open' : ''} ${isIdle ? 'is-idle' : ''} ${showLyrics ? 'lyrics-mode' : ''} ${showVideo && currentSong?.video_url ? 'video-bg-mode' : ''}`}
+        className={`fullscreen-tv-player ${isFullScreen ? 'open' : ''} ${isIdle ? 'is-idle' : ''} ${showLyrics ? 'lyrics-mode' : ''} ${showVideo && hasVideo ? 'video-bg-mode' : ''}`}
       >
         
         {/* HUD de Volumen Temporal (Aparece al cambiar volumen) */}
@@ -465,7 +505,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
         )}
 
         {/* FONDO: VIDEO o imagen dinámica */}
-        {showVideo && currentSong?.video_url ? (
+        {showVideo && hasVideo ? (
           <div className="fs-video-bg">
             {youtubeId ? (
               <>
@@ -499,9 +539,9 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
         <div className="fs-content-wrapper">
           <div className="fs-left-panel">
-            <div className={`fs-main-info ${uiTransition ? 'fading-out' : ''} ${showVideo && currentSong?.video_url ? 'video-mode-info' : ''}`}>
+            <div className={`fs-main-info ${uiTransition ? 'fading-out' : ''} ${showVideo && hasVideo ? 'video-mode-info' : ''}`}>
               {/* En modo video el cover se oculta o se muestra mini */}
-              {!(showVideo && currentSong?.video_url) && (
+              {!(showVideo && hasVideo) && (
                 <div className="premium-cover-container">
                   <img src={currentSong.cover_url} alt="Portada" className="fs-cover animated-cover" />
                   <div className="shine-overlay"></div>
@@ -568,23 +608,23 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
             <div className="fs-controls">
               <button className={`fs-ctrl-btn secondary ${isShuffled ? 'active-mode' : ''}`} onClick={toggleShuffle}><Shuffle size={24} /></button>
               <button className="fs-ctrl-btn primary" onClick={playPrevious}><SkipBack size={32} fill="currentColor" /></button>
-              <button className="fs-ctrl-btn fs-play-pause" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>{isPlaying ? <Pause size={36} fill="black" /> : <Play size={36} fill="black" style={{marginLeft: '4px'}} />}</button>
+              <button className="fs-ctrl-btn fs-play-pause" onClick={(e) => { e.stopPropagation(); resumeWebAudioContext(); togglePlay(); }}>{isPlaying ? <Pause size={36} fill="black" /> : <Play size={36} fill="black" style={{marginLeft: '4px'}} />}</button>
               <button className="fs-ctrl-btn primary" onClick={playNext}><SkipForward size={32} fill="currentColor" /></button>
               <button className={`fs-ctrl-btn secondary ${repeatMode !== 'none' ? 'active-mode' : ''}`} onClick={toggleRepeat}>{repeatMode === 'one' ? <Repeat size={24} strokeWidth={2.5} /> : <Repeat size={24} />}{repeatMode === 'one' && <span style={{ position: 'absolute', fontSize: '9px', fontWeight: 'bold', bottom: '2px', right: '2px' }}>1</span>}</button>
             </div>
 
             <div className="fs-controls-side right-side">
-              {currentSong?.video_url && (
+              {hasVideo && (
                 <button 
                   className={`fs-icon-btn ${showVideo ? 'active' : ''}`} 
-                  onClick={(e) => { e.stopPropagation(); setShowVideo(!showVideo); setShowLyrics(false); setShowQueue(false); }}
+                  onClick={(e) => { e.stopPropagation(); resumeWebAudioContext(); setShowVideo(!showVideo); setShowLyrics(false); setShowQueue(false); }}
                   title="Ver Video"
                 >
                   <Video size={28} />
                 </button>
               )}
               {/* Botón pantalla completa/landscape solo visible en móvil cuando hay video activo */}
-              {showVideo && currentSong?.video_url && (
+              {showVideo && hasVideo && (
                 <button
                   className={`fs-icon-btn video-fullscreen-btn ${isVideoFullscreen ? 'active' : ''}`}
                   onClick={(e) => { e.stopPropagation(); toggleVideoFullscreen(); }}

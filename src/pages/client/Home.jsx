@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Pause, Heart, WifiOff, Download, Check, RefreshCw } from 'lucide-react';
+import { Play, Pause, Heart, WifiOff, Download, Check, RefreshCw, MoreVertical } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
 import { recommendationEngine } from '../../utils/recommendationEngine';
+import { supabase } from '../../supabaseClient';
 import './Home.css';
 
 export default function Home() {
@@ -12,6 +13,7 @@ export default function Home() {
   const isPlaying = usePlayerStore(state => state.isPlaying);
   const playSong = usePlayerStore(state => state.playSong);
   const togglePlay = usePlayerStore(state => state.togglePlay);
+  const setActiveSongMenu = usePlayerStore(state => state.setActiveSongMenu);
 
   const playlists = useLibraryStore(state => state.playlists);
   const likedSongs = useLibraryStore(state => state.likedSongs);
@@ -30,13 +32,129 @@ export default function Home() {
     fetchPlaylists();
   }, [fetchPlaylists]);
 
-  // Selección de canciones candidato: si está en offline, usamos SOLO las descargadas
+  const [dbSongs, setDbSongs] = useState([]);
+  const [youtubeTasteSongs, setYoutubeTasteSongs] = useState([]);
+
+  // 1. Cargar todas las canciones locales de Supabase al iniciar
+  useEffect(() => {
+    const loadAllDbSongs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('songs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const formatted = data.map(s => ({
+            ...s,
+            source: s.source || 'local',
+            is_local: s.source !== 'youtube'
+          }));
+          setDbSongs(formatted);
+        }
+      } catch (err) {
+        console.warn("[Home] Error cargando canciones de base de datos:", err);
+      }
+    };
+
+    if (!isOfflineMode) {
+      loadAllDbSongs();
+    }
+  }, [isOfflineMode]);
+
+  // 2. Analizar perfil de gustos y cargar de fondo canciones de YouTube de artistas favoritos que falten en local
+  useEffect(() => {
+    if (isOfflineMode) return;
+
+    const loadYoutubeTasteSongs = async () => {
+      try {
+        const profile = recommendationEngine.getProfile();
+        const topArtists = profile.topArtists || [];
+        if (topArtists.length === 0) return;
+
+        // Cargar caché de mixes de YouTube
+        let mixCache = {};
+        try {
+          const cached = localStorage.getItem('musicfy_taste_mix_cache');
+          if (cached) mixCache = JSON.parse(cached);
+        } catch (e) {}
+
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+        const fetchedSongs = [];
+        let cacheChanged = false;
+
+        // Revisar los primeros 3 artistas favoritos
+        for (const artist of topArtists.slice(0, 3)) {
+          // Contar cuántos temas tenemos de este artista en DB
+          const localCount = dbSongs.filter(s => s.artist?.toLowerCase() === artist.toLowerCase()).length;
+          
+          // Si tenemos menos de 3 canciones de este artista en la biblioteca local,
+          // asumimos que es un artista escuchado de YouTube, por lo que resolvemos sus canciones de YouTube.
+          if (localCount < 3) {
+            if (mixCache[artist] && mixCache[artist].length > 0) {
+              fetchedSongs.push(...mixCache[artist]);
+            } else {
+              console.log(`[Home] Artista favorito "${artist}" sin suficientes canciones locales. Buscando en YouTube Music...`);
+              const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=song`);
+              if (res.ok) {
+                const data = await res.json();
+                const artistSongs = (data.items || []).slice(0, 12).map(item => {
+                  const yid = item.id.videoId;
+                  return {
+                    id: yid,
+                    title: item.snippet.title,
+                    artist: item.snippet.channelTitle,
+                    cover_url: item.snippet.thumbnails?.high?.url || '',
+                    url: null,
+                    source: 'youtube',
+                    youtube_id: yid,
+                    is_external: true,
+                    is_video: false
+                  };
+                });
+                
+                if (artistSongs.length > 0) {
+                  mixCache[artist] = artistSongs;
+                  cacheChanged = true;
+                  fetchedSongs.push(...artistSongs);
+                }
+              }
+            }
+          }
+        }
+
+        if (cacheChanged) {
+          localStorage.setItem('musicfy_taste_mix_cache', JSON.stringify(mixCache));
+        }
+
+        if (fetchedSongs.length > 0) {
+          setYoutubeTasteSongs(fetchedSongs);
+        }
+
+      } catch (err) {
+        console.warn("[Home] Error cargando canciones de gusto en segundo plano:", err);
+      }
+    };
+
+    // Esperamos un momento a que dbSongs esté listo para no hacer peticiones de más
+    if (dbSongs.length > 0) {
+      loadYoutubeTasteSongs();
+    }
+  }, [dbSongs, isOfflineMode]);
+
+  // Selección de canciones candidato: si está en offline, usamos descargadas.
+  // Sino, combinamos todas las canciones locales (dbSongs) y las dinámicas de YouTube (youtubeTasteSongs) para que el recomendador tenga un pool rico.
   const allSongs = useMemo(() => {
     if (isOfflineMode) {
       return downloadedMetadata;
     }
-    return queue;
-  }, [isOfflineMode, downloadedMetadata, queue]);
+    const baseList = dbSongs.length > 0 ? dbSongs : queue;
+    
+    // Combinar y deduplicar por ID
+    const combined = [...baseList, ...youtubeTasteSongs];
+    const uniqueMap = new Map(combined.map(s => [s.id, s]));
+    return Array.from(uniqueMap.values());
+  }, [isOfflineMode, downloadedMetadata, dbSongs, youtubeTasteSongs, queue]);
 
   // Saludo dinámico según la hora
   const greeting = useMemo(() => recommendationEngine.getGreeting(), []);
@@ -197,6 +315,12 @@ export default function Home() {
                           <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
                         )}
                       </button>
+                      <button 
+                        className="card-options-bubble"
+                        onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}
+                      >
+                        <MoreVertical size={16} />
+                      </button>
                     </div>
                     <div className="scroll-card-info">
                       <h4 className="scroll-card-title flex-title">
@@ -233,6 +357,12 @@ export default function Home() {
                         ) : (
                           <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
                         )}
+                      </button>
+                      <button 
+                        className="card-options-bubble"
+                        onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}
+                      >
+                        <MoreVertical size={16} />
                       </button>
                     </div>
                     <div className="scroll-card-info">

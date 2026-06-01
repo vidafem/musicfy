@@ -1,0 +1,294 @@
+/* SongMenu.css */
+.song-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end; /* Mobile bottom drawer default */
+  opacity: 0;
+  animation: songMenuFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.song-menu-drawer {
+  background: rgba(20, 20, 20, 0.78);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 500px;
+  padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  color: white;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  transform: translateY(100%);
+  animation: songMenuSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+}
+
+@keyframes songMenuFadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes songMenuSlideUp {
+  to { transform: translateY(0); }
+}
+
+.menu-song-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.menu-song-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.menu-song-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-song-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-song-artist {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-close-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.menu-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu-option-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  color: white;
+  width: 100%;
+  text-align: left;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-option-item:active {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(0.98);
+}
+
+.menu-option-item svg {
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.2s;
+}
+
+.menu-option-item:hover svg {
+  color: var(--accent-color, #1db954);
+}
+
+.menu-cancel-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: white;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.menu-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Selector de Playlist */
+.playlist-selector-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.selector-back-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selector-back-btn {
+  background: none;
+  border: none;
+  color: var(--accent-color, #1db954);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.selector-back-row h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.playlists-scroll-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.playlists-scroll-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.playlists-scroll-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.menu-playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: none;
+  color: white;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.menu-playlist-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.playlist-icon-square {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.5);
+}
+
+.no-playlists-text {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.4);
+  text-align: center;
+  padding: 20px;
+  margin: 0;
+}
+
+/* Toast interno del menú */
+.song-menu-toast {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(var(--accent-color-rgb, 29, 185, 84), 0.95);
+  color: black;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  z-index: 100000;
+  animation: toastFadeIn 0.2s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes toastFadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (min-width: 768px) {
+  .song-menu-overlay {
+    align-items: center;
+  }
+  .song-menu-drawer {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    width: 360px;
+    transform: scale(0.9);
+    animation: songMenuScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes songMenuScaleIn {
+    to { transform: scale(1); }
+  }
+}
+
+.playlist-icon-square.create-new-icon {
+  background: rgba(var(--accent-color-rgb, 29, 185, 84), 0.15);
+  color: var(--accent-color, #1db954);
+}
+
+.create-new-playlist-btn {
+  border: 1px dashed rgba(255, 255, 255, 0.15) !important;
+  background: rgba(var(--accent-color-rgb, 29, 185, 84), 0.03) !important;
+  margin-bottom: 8px;
+}
+
+.create-new-playlist-btn:hover {
+  background: rgba(var(--accent-color-rgb, 29, 185, 84), 0.08) !important;
+  border-color: var(--accent-color, #1db954) !important;
+}

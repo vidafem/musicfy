@@ -26,7 +26,13 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS ios_push_token TEXT,                  -- Para notificaciones iOS
   ADD COLUMN IF NOT EXISTS android_push_token TEXT,
   ADD COLUMN IF NOT EXISTS preferred_quality TEXT DEFAULT 'high' CHECK (preferred_quality IN ('low', 'medium', 'high', 'lossless')),
-  ADD COLUMN IF NOT EXISTS downloaded_songs JSONB DEFAULT '[]';  -- IDs de canciones offline
+  ADD COLUMN IF NOT EXISTS downloaded_songs JSONB DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS last_played_id UUID REFERENCES public.songs(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS is_playing BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS current_playback_time FLOAT DEFAULT 0.0,
+  ADD COLUMN IF NOT EXISTS active_device_id TEXT,
+  ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}';
+  -- IDs de canciones offline
 
 -- 3. CAMPOS EN PLAYLISTS (COLABORATIVAS Y SMART)
 ALTER TABLE public.playlists
@@ -124,6 +130,31 @@ CREATE POLICY "Allow public read access to songs" ON public.songs FOR SELECT USI
 
 DROP POLICY IF EXISTS "Allow admin write access to songs" ON public.songs;
 CREATE POLICY "Allow admin write access to songs" ON public.songs FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+-- Permitir a usuarios autenticados insertar/actualizar/eliminar canciones de YouTube o externas
+DROP POLICY IF EXISTS "Allow authenticated users to insert external songs" ON public.songs;
+CREATE POLICY "Allow authenticated users to insert external songs" ON public.songs
+  FOR INSERT
+  WITH CHECK (
+    auth.role() = 'authenticated' AND (source = 'youtube' OR source = 'spotify_preview')
+  );
+
+DROP POLICY IF EXISTS "Allow authenticated users to update external songs" ON public.songs;
+CREATE POLICY "Allow authenticated users to update external songs" ON public.songs
+  FOR UPDATE
+  USING (
+    auth.role() = 'authenticated' AND source = 'youtube'
+  )
+  WITH CHECK (
+    auth.role() = 'authenticated' AND source = 'youtube'
+  );
+
+DROP POLICY IF EXISTS "Allow authenticated users to delete external songs" ON public.songs;
+CREATE POLICY "Allow authenticated users to delete external songs" ON public.songs
+  FOR DELETE
+  USING (
+    auth.role() = 'authenticated' AND source = 'youtube'
+  );
 
 -- 9. ACTIVAR REALTIME PARA TABLAS NUEVAS
 DO $$
