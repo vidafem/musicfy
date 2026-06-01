@@ -224,7 +224,7 @@
 
 .table-header-row {
     display: grid;
-    grid-template-columns: 48px 4fr 3fr 2fr 120px;
+    grid-template-columns: 48px 5fr 3fr 120px;
     gap: 16px;
     padding: 0 16px 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -236,7 +236,7 @@
 
 .song-row {
     display: grid;
-    grid-template-columns: 48px 4fr 3fr 2fr 120px;
+    grid-template-columns: 48px 5fr 3fr 120px;
     gap: 16px;
     padding: 8px 16px;
     border-radius: 4px;
@@ -317,7 +317,7 @@
     color: #b3b3b3;
 }
 
-.col-album, .col-date {
+.col-album {
     color: #b3b3b3;
     font-size: 0.875rem;
     white-space: nowrap;

@@ -287,7 +287,6 @@ export default function PlaylistDetail() {
             <span className="col-idx">#</span>
             <span className="col-title">TÍTULO</span>
             <span className="col-album">ÁLBUM</span>
-            <span className="col-date">FECHA</span>
             <span className="col-duration"><Clock size={16} /></span>
           </div>
 
@@ -333,10 +332,6 @@ export default function PlaylistDetail() {
 
                   <div className="col-album">
                     <span>{song.album || 'Single'}</span>
-                  </div>
-
-                  <div className="col-date">
-                    <span>hace {Math.floor(Math.random() * 5 + 1)} días</span>
                   </div>
 
                   <div className="col-duration">
