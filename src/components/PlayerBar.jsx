@@ -642,7 +642,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
         {showQueue && <div className="queue-overlay" onClick={() => setShowQueue(false)}></div>}
         <div className={`fs-queue-sidebar ${showQueue ? 'open' : ''}`}>
           <div className="queue-header"><h3>Librería Musicfy</h3><button className="queue-close-btn" onClick={() => setShowQueue(false)}><X size={28} /></button></div>
-          <div className="queue-list">{queue.map(song => (<div key={song.id} className={`queue-item ${currentSong?.id === song.id ? 'active' : ''}`} onClick={() => playSong(song)}><img src={song.cover_url} alt="Cover" /><div className="queue-info"><h4>{song.title}</h4><p>{song.artist}</p></div></div>))}</div>
+          <div className="queue-list">{queue.map((song, index) => (<div key={`${song.id}_${index}`} className={`queue-item ${currentSong?.id === song.id ? 'active' : ''}`} onClick={() => playSong(song)}><img src={song.cover_url} alt="Cover" /><div className="queue-info"><h4>{song.title}</h4><p>{song.artist}</p></div></div>))}</div>
         </div>
       </div>
     </>

@@ -417,9 +417,16 @@ export const usePlayerStore = create((set, get) => ({
     }
   },
 
+  autoplayProcessedId: null,
+
   loadAutoplayNext: async (song) => {
     if (!song) return;
-    const { queue } = get();
+    const { queue, autoplayProcessedId } = get();
+    
+    // Evitar procesar el autoplay varias veces para la misma canción
+    if (autoplayProcessedId === song.id) return;
+    set({ autoplayProcessedId: song.id });
+
     const currentIndex = queue.findIndex(s => s.id === song.id);
     
     // Solo cargamos autoplay si es la última canción de la cola o no está en la cola
@@ -427,6 +434,7 @@ export const usePlayerStore = create((set, get) => ({
       console.log(`[Autoplay] Cargando música similar para: ${song.title} por ${song.artist}`);
       
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+      const existingIds = new Set(queue.map(s => s.id));
       
       if (song.source === 'youtube') {
         try {
@@ -446,7 +454,7 @@ export const usePlayerStore = create((set, get) => ({
                 is_external: true,
                 is_video: false
               };
-            }).filter(s => s.id !== song.id); // Evitar duplicar la actual
+            }).filter(s => s.id !== song.id && !existingIds.has(s.id)); // Evitar duplicar la actual y las existentes
             
             if (newSongs.length > 0) {
               const updatedQueue = [...queue];
@@ -456,7 +464,7 @@ export const usePlayerStore = create((set, get) => ({
               updatedQueue.push(...newSongs.slice(0, 10)); // agregar 10 canciones similares
               set({ queue: updatedQueue });
               dbStore.set('queue', updatedQueue);
-              console.log(`[Autoplay] Agregadas ${newSongs.length} canciones de YouTube similares a la cola.`);
+              console.log(`[Autoplay] Agregadas ${newSongs.slice(0, 10).length} canciones de YouTube similares a la cola.`);
             }
           }
         } catch (e) {
@@ -475,14 +483,14 @@ export const usePlayerStore = create((set, get) => ({
           const { data: matches } = await queryBuilder.limit(15);
           let localSongs = (matches || [])
             .map(s => ({ ...s, source: s.source || 'local', is_local: true }))
-            .filter(s => s.id !== song.id);
+            .filter(s => s.id !== song.id && !existingIds.has(s.id));
             
           if (localSongs.length === 0) {
             // Fallback a cualquier canción local
             const { data: anyLocal } = await supabase.from('songs').select('*').limit(10);
             localSongs = (anyLocal || [])
               .map(s => ({ ...s, source: s.source || 'local', is_local: true }))
-              .filter(s => s.id !== song.id);
+              .filter(s => s.id !== song.id && !existingIds.has(s.id));
           }
 
           if (localSongs.length > 0) {
@@ -493,7 +501,7 @@ export const usePlayerStore = create((set, get) => ({
             updatedQueue.push(...localSongs.slice(0, 10));
             set({ queue: updatedQueue });
             dbStore.set('queue', updatedQueue);
-            console.log(`[Autoplay] Agregadas ${localSongs.length} canciones locales similares a la cola.`);
+            console.log(`[Autoplay] Agregadas ${localSongs.slice(0, 10).length} canciones locales similares a la cola.`);
           }
         } catch (e) {
           console.warn('[Autoplay] Error cargando canciones similares locales:', e);
