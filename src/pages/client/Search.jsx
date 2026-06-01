@@ -62,7 +62,7 @@ export default function SearchPage() {
   });
 
   const { currentSong, isPlaying, playSong, togglePlay, setActiveSongMenu } = usePlayerStore();
-  const { likedSongs, toggleLike } = useLibraryStore();
+  const { likedSongs, toggleLike, isSongLiked } = useLibraryStore();
 
   useEffect(() => {
     loadExploreData();
@@ -600,7 +600,7 @@ export default function SearchPage() {
                             </div>
                           </div>
                           <button className="like-btn" onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
-                            <Heart size={18} fill={likedSongs.includes(song.id) ? "var(--accent-color)" : "none"} color={likedSongs.includes(song.id) ? "var(--accent-color)" : "white"} />
+                            <Heart size={18} fill={isSongLiked(song) ? "var(--accent-color)" : "none"} color={isSongLiked(song) ? "var(--accent-color)" : "white"} />
                           </button>
                           <button className="song-options-btn" onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}>
                             <MoreVertical size={18} />

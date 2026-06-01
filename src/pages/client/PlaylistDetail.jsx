@@ -4,6 +4,7 @@ import { Heart, Play, Shuffle, Search, ArrowLeft, Plus, MoreHorizontal, Clock, M
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
+import { supabase } from '../../supabaseClient';
 import './PlaylistDetail.css';
 
 export default function PlaylistDetail() {
@@ -20,6 +21,7 @@ export default function PlaylistDetail() {
 
   const playlists = useLibraryStore(state => state.playlists);
   const likedSongs = useLibraryStore(state => state.likedSongs);
+  const isSongLiked = useLibraryStore(state => state.isSongLiked);
   const fetchPlaylists = useLibraryStore(state => state.fetchPlaylists);
   const addSongToPlaylist = useLibraryStore(state => state.addSongToPlaylist);
   const toggleLike = useLibraryStore(state => state.toggleLike);
@@ -36,9 +38,41 @@ export default function PlaylistDetail() {
   const isUuid = useMemo(() => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id), [id]);
   const [externalPlaylist, setExternalPlaylist] = useState(null);
   const [externalLoading, setExternalLoading] = useState(false);
+  const [likedSongsList, setLikedSongsList] = useState([]);
+  const [likedLoading, setLikedLoading] = useState(false);
 
   useEffect(() => {
-    if (!isUuid && id) {
+    if (id === 'liked') {
+      const loadLikedSongsDetail = async () => {
+        setLikedLoading(true);
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data, error } = await supabase
+              .from('likes')
+              .select(`
+                song_id,
+                songs (*)
+              `)
+              .eq('user_id', user.id);
+            
+            if (!error && data) {
+              const songs = data.map(item => item.songs).filter(Boolean).map(s => ({
+                ...s,
+                source: s.source || 'local',
+                is_local: s.source !== 'youtube'
+              }));
+              setLikedSongsList(songs);
+            }
+          }
+        } catch (e) {
+          console.error("Error loading liked songs detail:", e);
+        } finally {
+          setLikedLoading(false);
+        }
+      };
+      loadLikedSongsDetail();
+    } else if (!isUuid && id) {
       setExternalLoading(true);
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
       fetch(`${BACKEND_URL}/playlist/tracks?id=${id}`)
@@ -55,11 +89,20 @@ export default function PlaylistDetail() {
         .catch(err => console.error("Error loading external playlist:", err))
         .finally(() => setExternalLoading(false));
     }
-  }, [id, isUuid]);
+  }, [id, isUuid, likedSongs]);
 
   const playlist = useMemo(() => {
+    if (id === 'liked') {
+      return {
+        id: 'liked',
+        title: 'Tus me gusta',
+        cover_url: likedSongsList[0]?.cover_url || '/icon.png',
+        songs: likedSongsList,
+        is_liked_playlist: true
+      };
+    }
     return isUuid ? playlists.find(p => p.id === id) : externalPlaylist;
-  }, [playlists, id, isUuid, externalPlaylist]);
+  }, [playlists, id, isUuid, externalPlaylist, likedSongsList]);
 
   // Checar si toda la playlist está descargada
   const isPlaylistDownloaded = useMemo(() => {
@@ -103,14 +146,20 @@ export default function PlaylistDetail() {
 
   const handlePlayAll = () => {
     if (playlist.songs.length) {
+      usePlayerStore.getState().setQueue(playlist.songs);
       playSong(playlist.songs[0]);
     }
   };
 
   const handleShuffle = () => {
     if (!playlist.songs.length) return;
-    const index = Math.floor(Math.random() * playlist.songs.length);
-    playSong(playlist.songs[index]);
+    const shuffled = [...playlist.songs];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    usePlayerStore.getState().setQueue(shuffled);
+    playSong(shuffled[0]);
   };
 
   return (
@@ -245,7 +294,7 @@ export default function PlaylistDetail() {
           <div className="songs-list">
             {playlistSongs.map((song, index) => {
               const isActive = currentSong?.id === song.id;
-              const isLiked = likedSongs.includes(song.id);
+              const isLiked = isSongLiked(song);
               const isDownloaded = downloadedIds.includes(song.id);
               const isDownloading = activeDownloads.has(song.id);
               const isAvailable = !isOfflineMode || isDownloaded;

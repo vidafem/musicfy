@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Plus, Search, Play, ChevronRight, X, Trash2 } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -8,6 +8,7 @@ import { useOfflineStore } from '../../store/useOfflineStore';
 import './Library.css';
 
 export default function Library() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('playlists');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -128,7 +129,7 @@ export default function Library() {
       </div>
 
       <div className="library-section-title" style={{ marginTop: '10px' }}>Me gusta</div>
-      <div className="library-folder" onClick={() => setShowCreateModal(false)}>
+      <div className="library-folder" onClick={() => navigate('/library/playlist/liked')}>
         <div className="folder-icon liked-icon">
           <Heart size={20} fill="currentColor" />
         </div>
@@ -136,38 +137,6 @@ export default function Library() {
           <span className="folder-name">Tus me gusta</span>
           <span className="folder-count">{likedList.length} canciones</span>
         </div>
-      </div>
-
-      <div className="library-liked-list">
-        {likedList.map((song) => {
-          const isActive = currentSong?.id === song.id;
-          return (
-            <div
-              key={song.id}
-              className={`liked-song-row ${isActive ? 'active' : ''}`}
-              onClick={() => handleSongClick(song)}
-            >
-              <div className="liked-cover-wrapper">
-                <img src={song.cover_url} alt={song.title} className="liked-cover" />
-                <div className="liked-play-overlay">
-                  {isActive && isPlaying
-                    ? <div className="mini-bars"><span /><span /><span /></div>
-                    : <Play size={12} fill="white" />
-                  }
-                </div>
-              </div>
-              <div className="liked-song-text">
-                <span className={`liked-song-name ${isActive ? 'active' : ''}`}>
-                  {song.title}
-                </span>
-                <span className="liked-song-artist">
-                  {downloadedIds.includes(song.id) && <span className="green-dl-dot-small" style={{ color: '#1db954', marginRight: '6px', fontSize: '0.65rem' }}>▼</span>}
-                  {song.artist}
-                </span>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       <div className="library-tabs">

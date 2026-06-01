@@ -8,8 +8,20 @@ export const useLibraryStore = create((set, get) => ({
       return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   })(),
-  likedSongs: [], // Array of song IDs
+  likedSongs: [], // Array of song UUIDs
+  likedYtSongs: [], // Array of YouTube videoIds
+  likedUrls: [], // Array of local song URLs
   isLoading: false,
+
+  isSongLiked: (song) => {
+    if (!song) return false;
+    const { likedSongs, likedYtSongs, likedUrls } = get();
+    if (likedSongs.includes(song.id)) return true;
+    const yid = song.youtube_id || (song.source === 'youtube' ? song.id : null);
+    if (yid && likedYtSongs && likedYtSongs.includes(yid)) return true;
+    if (song.url && likedUrls && likedUrls.includes(song.url)) return true;
+    return false;
+  },
 
   fetchPlaylists: async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -270,12 +282,23 @@ export const useLibraryStore = create((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('likes')
-        .select('song_id')
+        .select(`
+          song_id,
+          songs (youtube_id, url)
+        `)
         .eq('user_id', user.id);
 
       if (error) throw error;
 
-      set({ likedSongs: data.map(l => l.song_id) });
+      const likedIds = data.map(l => l.song_id);
+      const likedYtIds = data.map(l => l.songs?.youtube_id).filter(Boolean);
+      const likedUrls = data.map(l => l.songs?.url).filter(Boolean);
+
+      set({ 
+        likedSongs: likedIds,
+        likedYtSongs: likedYtIds,
+        likedUrls: likedUrls
+      });
     } catch (error) {
       console.error('Error fetching likes:', error);
     }
@@ -288,51 +311,96 @@ export const useLibraryStore = create((set, get) => ({
         return;
     }
 
-    const { likedSongs } = get();
-    // We need to handle both song objects and just IDs for UI compatibility
-    const songId = typeof song === 'string' ? song : song.id;
-    const isLiked = likedSongs.includes(songId);
+    const { likedSongs, likedYtSongs, likedUrls } = get();
+    
+    let isLiked = false;
+    let dbSongId = null;
+    
+    const isYouTube = song.source === 'youtube' || song.is_external;
+    const yid = song.youtube_id || (isYouTube ? song.id : null);
 
     try {
-      if (isLiked) {
-        // Remove like
+      // 1. Buscar si la canción ya existe en la base de datos de Supabase
+      let songIdInDb = null;
+      if (isYouTube && yid) {
+        const { data: existingSong } = await supabase
+          .from('songs')
+          .select('id')
+          .eq('youtube_id', yid)
+          .maybeSingle();
+        if (existingSong) songIdInDb = existingSong.id;
+      } else if (song.id && song.id.length === 36) {
+        songIdInDb = song.id;
+      } else if (song.url) {
+        const { data: existingSong } = await supabase
+          .from('songs')
+          .select('id')
+          .eq('url', song.url)
+          .maybeSingle();
+        if (existingSong) songIdInDb = existingSong.id;
+      }
+
+      // 2. Si existe la canción, ver si tiene un Like activo
+      if (songIdInDb) {
+        const { data: existingLike } = await supabase
+          .from('likes')
+          .select('song_id')
+          .eq('user_id', user.id)
+          .eq('song_id', songIdInDb)
+          .maybeSingle();
+          
+        if (existingLike) {
+          isLiked = true;
+          dbSongId = songIdInDb;
+        }
+      }
+
+      if (isLiked && dbSongId) {
+        // Eliminar Like
         const { error } = await supabase
           .from('likes')
           .delete()
           .eq('user_id', user.id)
-          .eq('song_id', songId);
+          .eq('song_id', dbSongId);
 
         if (error) throw error;
 
-        set({ likedSongs: likedSongs.filter(id => id !== songId) });
+        const updatedLikedSongs = likedSongs.filter(id => id !== dbSongId);
+        const updatedLikedYt = yid ? likedYtSongs.filter(id => id !== yid) : likedYtSongs;
+        const updatedLikedUrls = song.url ? likedUrls.filter(u => u !== song.url) : likedUrls;
 
-        // Garbage Collector Check: si es de youtube y ya no está en ninguna playlist ni likes, borrar de la tabla songs
+        set({ 
+          likedSongs: updatedLikedSongs,
+          likedYtSongs: updatedLikedYt,
+          likedUrls: updatedLikedUrls
+        });
+
+        // Garbage Collector Check para canciones de YouTube
         const { data: songData } = await supabase
           .from('songs')
           .select('source')
-          .eq('id', songId)
+          .eq('id', dbSongId)
           .maybeSingle();
 
         if (songData && songData.source === 'youtube') {
           const { count: plCount } = await supabase
             .from('playlist_songs')
             .select('*', { count: 'exact', head: true })
-            .eq('song_id', songId);
+            .eq('song_id', dbSongId);
 
           const { count: likeCount } = await supabase
             .from('likes')
             .select('*', { count: 'exact', head: true })
-            .eq('song_id', songId);
+            .eq('song_id', dbSongId);
 
           if ((plCount || 0) === 0 && (likeCount || 0) === 0) {
-            console.log(`[GC] Eliminando canción huérfana de YouTube (post-unlike) de la DB: ${songId}`);
-            await supabase.from('songs').delete().eq('id', songId);
+            console.log(`[GC] Eliminando canción huérfana de YouTube (post-unlike) de la DB: ${dbSongId}`);
+            await supabase.from('songs').delete().eq('id', dbSongId);
           }
         }
       } else {
-        // Add like
-        // Ensure song is in DB first if it's an object
-        let finalSongId = songId;
+        // Agregar Like
+        let finalSongId = song.id;
         if (typeof song !== 'string') {
             finalSongId = await get().ensureSongInDb(song);
         }
@@ -348,10 +416,14 @@ export const useLibraryStore = create((set, get) => ({
 
         if (error) throw error;
 
-        set({ likedSongs: [...likedSongs, finalSongId] });
+        set({ 
+          likedSongs: [...likedSongs, finalSongId],
+          likedYtSongs: yid ? [...likedYtSongs, yid] : likedYtSongs,
+          likedUrls: song.url ? [...likedUrls, song.url] : likedUrls
+        });
       }
       
-      // Update useSettingsStore to keep it in sync (since UI might still use it)
+      // Sincronizar useSettingsStore
       const { useSettingsStore } = await import('./useSettingsStore');
       useSettingsStore.setState({ likedSongs: get().likedSongs });
 
