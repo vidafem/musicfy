@@ -6,6 +6,7 @@ import { useOfflineStore } from '../../store/useOfflineStore';
 import { recommendationEngine } from '../../utils/recommendationEngine';
 import { supabase } from '../../supabaseClient';
 import { BACKEND_URL } from '../../config';
+import { fetchWithTimeout } from '../../utils/fetchHelper';
 import './Home.css';
 
 export default function Home() {
@@ -94,7 +95,7 @@ export default function Home() {
               fetchedSongs.push(...mixCache[artist]);
             } else {
               console.log(`[Home] Artista favorito "${artist}" sin suficientes canciones locales. Buscando en YouTube Music...`);
-              const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=song`);
+              const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=song`);
               if (res.ok) {
                 const data = await res.json();
                 const artistSongs = (data.items || []).slice(0, 12).map(item => {

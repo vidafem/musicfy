@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient'
 import { getHighResThumbnail } from '../utils/pipedService'
 import { WORKER_URL, BACKEND_URL } from '../config'
+import { fetchWithTimeout } from '../utils/fetchHelper'
 
 // Bandera de autocuración de esquema para evitar HTTP 400 en consola de red
 let dbSchemaSupportsSource = true;
@@ -119,7 +120,7 @@ export const YouTubeProvider = {
   
   async search(query, limit = 10) {
     try {
-      const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
       if (!res.ok) return []
       const data = await res.json()
       return (data.items || []).map(normalizeYouTube)
@@ -131,7 +132,7 @@ export const YouTubeProvider = {
   
   async getStreamUrl(youtubeId) {
     try {
-      const res = await fetch(`${BACKEND_URL}/stream?id=${youtubeId}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`)
       if (!res.ok) throw new Error('No se pudo obtener la URL del stream')
       const { url } = await res.json()
       return url
@@ -144,7 +145,7 @@ export const YouTubeProvider = {
   async getMetadata(youtubeId) {
     // Si no está soportado en backend, retornar null o consultar metadata
     try {
-      const res = await fetch(`${BACKEND_URL}/metadata/${youtubeId}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/metadata/${youtubeId}`)
       if (!res.ok) return null
       return res.json()
     } catch {

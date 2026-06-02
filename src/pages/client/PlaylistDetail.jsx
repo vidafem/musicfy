@@ -6,6 +6,7 @@ import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
 import { supabase } from '../../supabaseClient';
 import { BACKEND_URL } from '../../config';
+import { fetchWithTimeout } from '../../utils/fetchHelper';
 import './PlaylistDetail.css';
 
 export default function PlaylistDetail() {
@@ -75,7 +76,7 @@ export default function PlaylistDetail() {
       loadLikedSongsDetail();
     } else if (!isUuid && id) {
       setExternalLoading(true);
-      fetch(`${BACKEND_URL}/playlist/tracks?id=${id}`)
+      fetchWithTimeout(`${BACKEND_URL}/playlist/tracks?id=${id}`)
         .then(res => res.json())
         .then(data => {
           setExternalPlaylist({

@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useSettingsStore } from './useSettingsStore';
 import { dbStore } from '../utils/indexedDB';
 import { BACKEND_URL } from '../config';
+import { fetchWithTimeout } from '../utils/fetchHelper';
 
 // Generamos o recuperamos un ID de dispositivo único (sessionStorage para separar pestañas)
 const getDeviceId = () => {
@@ -437,7 +438,7 @@ export const usePlayerStore = create((set, get) => ({
       
       if (song.source === 'youtube') {
         try {
-          const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(song.artist)}&type=song`);
+          const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(song.artist)}&type=song`);
           if (res.ok) {
             const data = await res.json();
             const newSongs = (data.items || []).map(item => {

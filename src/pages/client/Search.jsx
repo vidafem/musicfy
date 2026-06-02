@@ -7,6 +7,7 @@ import { supabase } from '../../supabaseClient';
 import { fetchFromPiped, getHighResThumbnail } from '../../utils/pipedService';
 import { recommendationEngine } from '../../utils/recommendationEngine';
 import { BACKEND_URL } from '../../config';
+import { fetchWithTimeout } from '../../utils/fetchHelper';
 import './Search.css';
 
 // Caché en memoria para búsquedas instantáneas
@@ -136,7 +137,7 @@ export default function SearchPage() {
       if (artistsToFetch.length > 0) {
         Promise.allSettled(
           artistsToFetch.map(async (artist) => {
-            const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`);
+            const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`);
             if (res.ok) {
               const data = await res.json();
               const firstArtist = data.items?.[0];

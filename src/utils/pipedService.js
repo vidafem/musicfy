@@ -6,6 +6,7 @@
  * las inestables instancias públicas de Piped.
  */
 import { BACKEND_URL } from '../config';
+import { fetchWithTimeout } from './fetchHelper';
 
 /**
  * Retorna la URL de la imagen en alta resolución reemplazando sufijos de miniatura.
@@ -35,30 +36,6 @@ export function getHighResThumbnail(url) {
   }
   
   return url;
-}
-
-/**
- * Helper to perform fetch with a timeout (default 10s).
- */
-async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
-  try {
-    const res = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-      }
-    });
-    clearTimeout(timeoutId);
-    return res;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
-  }
 }
 
 /**
