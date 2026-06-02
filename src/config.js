@@ -20,4 +20,4 @@ const isLocalhost = typeof window !== 'undefined' && (
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
   (isLocalhost
     ? `${window.location.protocol}//${window.location.hostname}:5000/api`
-    : 'https://musicfy-api.onrender.com/api');
+    : '/api');

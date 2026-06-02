@@ -43,7 +43,7 @@ export function getHighResThumbnail(url) {
  * @param {string} path - Ruta solicitada (ej. "/search?q=..." o "/streams/...")
  * @returns {Promise<any>}
  */
-export async function fetchFromPiped(path) {
+export async function fetchFromPiped(path, options = {}) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   
   try {
@@ -61,7 +61,7 @@ export async function fetchFromPiped(path) {
       
       console.log(`[PipedProxy] Redirigiendo búsqueda al backend para: "${query}", tipo: ${type}`);
       
-      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`, {}, 15000);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`, { signal: options.signal }, 15000);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -96,7 +96,7 @@ export async function fetchFromPiped(path) {
       const videoId = cleanPath.split('/').pop();
       console.log(`[PipedProxy] Redirigiendo resolución de stream al backend para: ${videoId}`);
       
-      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`, {}, 35000);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`, { signal: options.signal }, 35000);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -115,10 +115,13 @@ export async function fetchFromPiped(path) {
     }
     
     // Ruta genérica
-    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`, {}, 20000);
+    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`, { signal: options.signal }, 20000);
     return await res.json();
     
   } catch (err) {
+    if (err.name === 'AbortError') {
+      throw err;
+    }
     console.error(`[PipedProxy] Error en proxy hacia backend para la ruta ${cleanPath}:`, err);
     throw new Error(`Error en el servidor local de música: ${err.message}`);
   }

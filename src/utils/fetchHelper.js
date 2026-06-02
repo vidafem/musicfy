@@ -1,20 +1,24 @@
 /**
- * Realiza una petición fetch con un tiempo de espera (timeout) configurable.
- * Útil para evitar bloqueos del cliente cuando el backend (por ejemplo en Render) está en cold start (durmiendo).
- * 
+ * Realiza una peticion fetch con timeout configurable y soporte de cancelacion.
+ *
  * @param {string} url - URL a la que se hace fetch
- * @param {object} options - Opciones del fetch (headers, method, etc.)
- * @param {number} timeoutMs - Tiempo de espera máximo en milisegundos (por defecto 10000ms)
+ * @param {object} options - Opciones del fetch
+ * @param {number} timeoutMs - Tiempo de espera maximo en milisegundos
  * @returns {Promise<Response>}
  */
 export async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-  
+  const externalSignal = options.signal;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const abortFromExternalSignal = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', abortFromExternalSignal, { once: true });
+  }
+
   try {
-    const res = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -22,13 +26,20 @@ export async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
         ...(options.headers || {})
       }
     });
-    clearTimeout(timeoutId);
-    return res;
   } catch (err) {
-    clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error(`Timeout de conexión al backend (${timeoutMs / 1000}s) - El backend podría estar iniciando`);
+      if (externalSignal?.aborted) {
+        const abortErr = new Error('Peticion cancelada');
+        abortErr.name = 'AbortError';
+        throw abortErr;
+      }
+      throw new Error(`Timeout de conexion al backend (${timeoutMs / 1000}s)`);
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', abortFromExternalSignal);
+    }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search as SearchIcon, Play, Heart, Music, Loader2, X, Mic2, Radio, Video, Headphones, MoreVertical } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -52,6 +52,7 @@ export default function SearchPage() {
   const [favoriteGenres, setFavoriteGenres] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const searchRequestRef = useRef({ id: 0, controller: null });
   const [activeFilter, setActiveFilter] = useState('Música');
 
   const [searchHistory, setSearchHistory] = useState(() => {
@@ -180,17 +181,23 @@ export default function SearchPage() {
       if (query.trim()) {
         performSearch();
       } else {
+        searchRequestRef.current.controller?.abort();
         setResults([]);
         setPlaylistsAndAlbums([]);
         setHasSearched(false);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, activeFilter]);
 
   const performSearch = async () => {
     const trimmed = query.trim();
     if (!trimmed) return;
+
+    searchRequestRef.current.controller?.abort();
+    const requestId = searchRequestRef.current.id + 1;
+    const controller = new AbortController();
+    searchRequestRef.current = { id: requestId, controller };
 
     const cacheKey = `${trimmed}_${activeFilter}`;
     
@@ -245,10 +252,7 @@ export default function SearchPage() {
       const youtubeSongsPromise = (async () => {
         try {
           const filterParam = activeFilter === 'Videos' ? 'music_videos' : 'songs';
-          const ytData = await Promise.race([
-            fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=${filterParam}`),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de YouTube Music (5s)')), 5000))
-          ]);
+          const ytData = await fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=${filterParam}`, { signal: controller.signal });
           return (ytData?.items || []).map(item => {
             if (!item.url) return null;
             const yid = item.url.split('=')[1] || item.url.split('/').pop();
@@ -266,6 +270,7 @@ export default function SearchPage() {
             };
           }).filter(Boolean);
         } catch (ytErr) {
+          if (ytErr.name === 'AbortError') return [];
           console.error("Error o timeout al buscar canciones en YouTube:", ytErr);
           return [];
         }
@@ -275,7 +280,7 @@ export default function SearchPage() {
       const [localSongs, youtubeSongs] = await Promise.all([localPromise, youtubeSongsPromise]);
       
       // Evitar sobreescribir si el usuario ya cambió la búsqueda
-      if (query.trim() !== trimmed) return;
+      if (searchRequestRef.current.id !== requestId || query.trim() !== trimmed) return;
 
       const combinedSongs = [...localSongs, ...youtubeSongs];
       setResults(combinedSongs);
@@ -290,19 +295,15 @@ export default function SearchPage() {
 
       // 4. Si el filtro es Música, buscar playlists/álbumes de fondo
       if (activeFilter === 'Música') {
-        const playlistPromise = Promise.race([
-          fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=playlists`),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout Playlists (5s)')), 5000))
-        ]).catch(() => ({ items: [] }));
+        const playlistPromise = fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=playlists`, { signal: controller.signal })
+          .catch(() => ({ items: [] }));
 
-        const albumPromise = Promise.race([
-          fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=albums`),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout Albums (5s)')), 5000))
-        ]).catch(() => ({ items: [] }));
+        const albumPromise = fetchFromPiped(`/search?q=${encodeURIComponent(trimmed)}&filter=albums`, { signal: controller.signal })
+          .catch(() => ({ items: [] }));
 
         const [playlistData, albumData] = await Promise.all([playlistPromise, albumPromise]);
         
-        if (query.trim() !== trimmed) return;
+        if (searchRequestRef.current.id !== requestId || query.trim() !== trimmed) return;
 
         const externalPlaylists = [
           ...(playlistData?.items || []).map(p => ({ ...p, type: 'playlist' })),
