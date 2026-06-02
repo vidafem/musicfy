@@ -136,14 +136,17 @@ function normalizePlaylistItem(item, searchType) {
 }
 
 async function searchYouTubeMusic(q, searchType) {
-  const ready = await withTimeout(initYtApi(), 6000, 'Timeout inicializando YouTube Music');
+  const initTimeout = isServerless ? 3000 : 6000;
+  const searchTimeout = isServerless ? 4000 : 12000;
+  const ready = await withTimeout(initYtApi(), initTimeout, 'Timeout inicializando YouTube Music');
   if (!ready) throw new Error('YouTube Music API no inicializada');
-  const result = await withTimeout(ytApi.search(q, searchType), 12000, 'Timeout de busqueda en YouTube Music');
+  const result = await withTimeout(ytApi.search(q, searchType), searchTimeout, 'Timeout de busqueda en YouTube Music');
   return result.content || [];
 }
 
 async function searchWithYoutubeExt(q, searchType) {
-  const result = await withTimeout(ytSearch(q), 12000, 'Timeout de busqueda alternativa en YouTube');
+  const timeoutMs = isServerless ? 4000 : 12000;
+  const result = await withTimeout(ytSearch(q), timeoutMs, 'Timeout de busqueda alternativa en YouTube');
   if (searchType === 'playlist' || searchType === 'album') {
     return (result.playlists || []).map((item) => normalizePlaylistItem(item, searchType));
   }
@@ -151,16 +154,17 @@ async function searchWithYoutubeExt(q, searchType) {
 }
 
 async function resolveStreamWithYoutubeExt(id) {
+  const timeoutMs = isServerless ? 3500 : 12000;
   const info = await withTimeout(
     videoInfo(`https://www.youtube.com/watch?v=${id}`),
-    12000,
+    timeoutMs,
     'Timeout obteniendo informacion de video'
   );
   const formats = await withTimeout(
     getFormats(info.stream, {
       filterBy: (format) => Boolean(format.url) && Boolean(format.mimeType?.includes('audio'))
     }),
-    12000,
+    timeoutMs,
     'Timeout decodificando formatos de audio'
   );
 
@@ -173,9 +177,10 @@ async function resolveStreamWithYoutubeExt(id) {
 }
 
 async function resolveStreamWithYtdlCore(id) {
+  const timeoutMs = isServerless ? 4000 : 12000;
   const info = await withTimeout(
     ytdl.getInfo(`https://www.youtube.com/watch?v=${id}`),
-    12000,
+    timeoutMs,
     'Timeout obteniendo formatos con ytdl-core'
   );
   const format = ytdl.chooseFormat(info.formats, {
@@ -246,6 +251,48 @@ async function resolveStreamWithPiped(id) {
   }
 
   throw new Error(errors.join(' | ') || 'Piped no devolvio stream');
+}
+
+async function resolveStreamWithPipedParallel(id) {
+  const instances = [
+    'https://pipedapi.kavin.rocks',
+    'https://pipedapi.tokhmi.xyz',
+    'https://pipedapi.moomoo.me',
+    'https://pipedapi.syncpundit.io',
+    'https://api-piped.mha.fi',
+    'https://pipedapi.adminforge.de',
+    'https://pipedapi.colby.host',
+    'https://pipedapi.leptons.xyz',
+    'https://piped-api.lunar.icu'
+  ];
+
+  const fetchFromInstance = async (baseUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout por espejo
+    try {
+      const response = await fetch(`${baseUrl}/streams/${id}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const stream = (data.audioStreams || [])
+        .filter((item) => item.url)
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      if (stream?.url) return stream.url;
+      throw new Error('Sin audioStreams');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  try {
+    return await Promise.any(instances.map(url => fetchFromInstance(url)));
+  } catch (err) {
+    throw new Error('Todos los espejos de Piped fallaron');
+  }
 }
 
 app.get('/api/health', (req, res) => {
@@ -352,12 +399,18 @@ app.get('/api/stream', async (req, res) => {
   if (!isValidYouTubeId(id)) return res.status(400).json({ error: 'ID de video invalido' });
 
   console.log(`[Stream] Obteniendo URL de stream para video: ${id}`);
-  const resolvers = [
-    ['youtube-ext', resolveStreamWithYoutubeExt],
-    ['ytdl-core', resolveStreamWithYtdlCore],
-    ['piped-api', resolveStreamWithPiped],
-    ['yt-dlp', resolveStreamWithYtDlp]
-  ];
+  const resolvers = isServerless
+    ? [
+        ['piped-parallel', resolveStreamWithPipedParallel],
+        ['youtube-ext', resolveStreamWithYoutubeExt],
+        ['ytdl-core', resolveStreamWithYtdlCore]
+      ]
+    : [
+        ['youtube-ext', resolveStreamWithYoutubeExt],
+        ['ytdl-core', resolveStreamWithYtdlCore],
+        ['piped-api', resolveStreamWithPiped],
+        ['yt-dlp', resolveStreamWithYtDlp]
+      ];
 
   const errors = [];
   for (const [name, resolver] of resolvers) {
