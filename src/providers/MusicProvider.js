@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient'
 import { getHighResThumbnail } from '../utils/pipedService'
+import { WORKER_URL } from '../config'
 
-const WORKER_URL = import.meta.env.VITE_WORKER_URL
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'
 
 // Bandera de autocuración de esquema para evitar HTTP 400 en consola de red

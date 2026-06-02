@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { SUPABASE_URL } from '../config'
 
 export const uploadToR2 = async (file, path) => {
   const fileBase64 = await fileToBase64(file)
@@ -9,7 +10,7 @@ export const uploadToR2 = async (file, path) => {
   }
   
   const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-to-r2`,
+    `${SUPABASE_URL}/functions/v1/upload-to-r2`,
     {
       method: 'POST',
       headers: {
@@ -37,7 +38,7 @@ export const deleteFromR2 = async (path) => {
   }
 
   const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-to-r2`,
+    `${SUPABASE_URL}/functions/v1/upload-to-r2`,
     {
       method: 'POST',
       headers: {

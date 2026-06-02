@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config'
 
 /* 
  * CONEXIÓN A SUPABASE
- * Las credenciales ahora se leen de forma segura desde el archivo .env
+ * Las credenciales se leen desde config.js con fallbacks para producción
  */
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)

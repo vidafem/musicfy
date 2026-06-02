@@ -1,10 +1,7 @@
 import { useRef, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { uploadToR2, deleteFromR2 } from '../lib/cloudflareR2';
-
-const WORKER_URL = 'https://musicfy.canonedu17.workers.dev';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { SUPABASE_URL, SUPABASE_ANON_KEY, WORKER_URL, R2_PUBLIC_URL } from '../config';
 
 const withTimeout = async (promiseOrFn, timeoutMs = 30000) => {
   const controller = new AbortController();
@@ -191,7 +188,7 @@ export function useMusicActions() {
 
       // Cover Task
       if (coverUrl) {
-        if (coverUrl.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
+        if (coverUrl.includes(R2_PUBLIC_URL)) {
           finalCoverUrl = coverUrl;
         } else {
           uploadTasks.push((async () => {
@@ -213,7 +210,7 @@ export function useMusicActions() {
 
       // Background Task
       if (metadata.background_url) {
-        if (metadata.background_url.includes(import.meta.env.VITE_R2_PUBLIC_URL)) {
+        if (metadata.background_url.includes(R2_PUBLIC_URL)) {
           finalBackgroundUrl = metadata.background_url;
         } else {
           uploadTasks.push((async () => {
@@ -423,7 +420,7 @@ export function useMusicActions() {
     setStatusModal({ show: true, title: 'Eliminando musica y archivos', steps, type: 'loading' });
 
     try {
-      const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
+      const publicUrl = R2_PUBLIC_URL;
       const getKey = (url) => (url?.includes(publicUrl) ? url.replace(`${publicUrl}/`, '') : null);
 
       const mp3Key = getKey(song.url);
@@ -512,7 +509,7 @@ export function useMusicActions() {
       updateStatusStep(0, 'done');
 
       updateStatusStep(1, 'active');
-      const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
+      const publicUrl = R2_PUBLIC_URL;
       const getKey = (url) => (url?.includes(publicUrl) ? url.replace(`${publicUrl}/`, '') : null);
 
       for (const song of songsList) {
