@@ -82,13 +82,12 @@ export default function Library() {
     );
   }, [playlistCards, playlistQuery]);
 
-  const likedList = useMemo(() => {
-    const list = queue.filter(song => likedSongs.includes(song.id));
+  const likedSongsCount = useMemo(() => {
     if (isOfflineMode) {
-      return list.filter(song => downloadedIds.includes(song.id));
+      return downloadedIds.filter(id => likedSongs.includes(id)).length;
     }
-    return list;
-  }, [queue, likedSongs, isOfflineMode, downloadedIds]);
+    return likedSongs.length;
+  }, [likedSongs, isOfflineMode, downloadedIds]);
 
   const handleSongClick = (song) => {
     if (currentSong?.id === song.id) {
@@ -135,7 +134,7 @@ export default function Library() {
         </div>
         <div className="folder-info">
           <span className="folder-name">Tus me gusta</span>
-          <span className="folder-count">{likedList.length} canciones</span>
+          <span className="folder-count">{likedSongsCount} canciones</span>
         </div>
       </div>
 

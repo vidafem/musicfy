@@ -5,6 +5,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
 import { supabase } from '../../supabaseClient';
+import { BACKEND_URL } from '../../config';
 import './PlaylistDetail.css';
 
 export default function PlaylistDetail() {
@@ -74,7 +75,6 @@ export default function PlaylistDetail() {
       loadLikedSongsDetail();
     } else if (!isUuid && id) {
       setExternalLoading(true);
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
       fetch(`${BACKEND_URL}/playlist/tracks?id=${id}`)
         .then(res => res.json())
         .then(data => {

@@ -1,8 +1,6 @@
 import { supabase } from '../supabaseClient'
 import { getHighResThumbnail } from '../utils/pipedService'
-import { WORKER_URL } from '../config'
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'
+import { WORKER_URL, BACKEND_URL } from '../config'
 
 // Bandera de autocuración de esquema para evitar HTTP 400 en consola de red
 let dbSchemaSupportsSource = true;

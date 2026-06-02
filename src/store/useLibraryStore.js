@@ -114,9 +114,16 @@ export const useLibraryStore = create((set, get) => ({
   },
 
   ensureSongInDb: async (song) => {
-    // If it already has a UUID, we assume it's in the DB
-    if (song.id && song.id.length === 36) { // Basic UUID check
-        return song.id;
+    // Si tiene un UUID, verificar si realmente existe en la BD
+    if (song.id && song.id.length === 36) {
+      const { data: existing } = await supabase
+        .from('songs')
+        .select('id')
+        .eq('id', song.id)
+        .maybeSingle();
+      if (existing) {
+        return existing.id;
+      }
     }
 
     const isYouTube = song.source === 'youtube' || song.is_external;
@@ -304,11 +311,43 @@ export const useLibraryStore = create((set, get) => ({
     }
   },
 
-  toggleLike: async (song) => {
+  toggleLike: async (songOrId) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         alert('Debes iniciar sesión para guardar favoritos.');
         return;
+    }
+
+    let song = songOrId;
+    if (typeof songOrId === 'string') {
+      const { queue } = (await import('./usePlayerStore')).usePlayerStore.getState();
+      const foundInQueue = queue.find(s => s.id === songOrId);
+      if (foundInQueue) {
+        song = foundInQueue;
+      } else {
+        const foundInLibrary = get().playlists.flatMap(p => p.songs).find(s => s.id === songOrId);
+        if (foundInLibrary) {
+          song = foundInLibrary;
+        } else {
+          if (songOrId.length === 36) {
+            const { data: dbSong } = await supabase
+              .from('songs')
+              .select('*')
+              .eq('id', songOrId)
+              .maybeSingle();
+            if (dbSong) {
+              song = {
+                ...dbSong,
+                source: dbSong.source || 'local'
+              };
+            } else {
+              song = { id: songOrId };
+            }
+          } else {
+            song = { id: songOrId };
+          }
+        }
+      }
     }
 
     const { likedSongs, likedYtSongs, likedUrls } = get();

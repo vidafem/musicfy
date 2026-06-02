@@ -5,8 +5,7 @@
  * backend de Node.js local (que utiliza yt-dlp y ytmusicapi) en lugar de consultar
  * las inestables instancias públicas de Piped.
  */
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+import { BACKEND_URL } from '../config';
 
 /**
  * Retorna la URL de la imagen en alta resolución reemplazando sufijos de miniatura.

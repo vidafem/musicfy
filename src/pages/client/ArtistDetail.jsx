@@ -135,7 +135,7 @@ export default function ArtistDetail() {
                     <span className="song-plays-count">{(Math.random() * 150 + 10).toFixed(3).replace('.', '.')}</span>
                   </div>
                   <div className="song-end-actions">
-                     <button className="row-like-btn" onClick={(e) => { e.stopPropagation(); toggleLike(song.id); }}>
+                     <button className="row-like-btn" onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
                         <Heart size={18} fill={likedSongs.includes(song.id) ? "var(--accent-color)" : "none"} color={likedSongs.includes(song.id) ? "var(--accent-color)" : "rgba(255,255,255,0.5)"} />
                      </button>
                      <MoreHorizontal size={18} className="row-more" />

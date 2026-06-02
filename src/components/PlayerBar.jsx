@@ -577,7 +577,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
           <div className="fs-controls-row">
             <div className="fs-controls-side">
-              <button className={`fs-icon-btn ${likedSongs.includes(currentSong?.id) ? 'active' : ''}`} onClick={() => currentSong && toggleLike(currentSong.id)}><Heart size={28} fill={likedSongs.includes(currentSong?.id) ? 'currentColor' : 'none'} /></button>
+              <button className={`fs-icon-btn ${likedSongs.includes(currentSong?.id) ? 'active' : ''}`} onClick={() => currentSong && toggleLike(currentSong)}><Heart size={28} fill={likedSongs.includes(currentSong?.id) ? 'currentColor' : 'none'} /></button>
               {crossfadeEnabled && <span className={`mixer-indicator ${isMixing ? 'active-pulse' : ''}`}>MIXER</span>}
               <div className="connect-wrapper">
                 <div className={`connect-indicator ${activeDeviceId === deviceId ? 'is-principal' : 'is-mirror'}`} onClick={() => setShowDeviceSelector(!showDeviceSelector)}>

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '../supabaseClient';
 import { useSettingsStore } from './useSettingsStore';
 import { dbStore } from '../utils/indexedDB';
+import { BACKEND_URL } from '../config';
 
 // Generamos o recuperamos un ID de dispositivo único (sessionStorage para separar pestañas)
 const getDeviceId = () => {
@@ -432,8 +433,6 @@ export const usePlayerStore = create((set, get) => ({
     // Solo cargamos autoplay si es la última canción de la cola o no está en la cola
     if (currentIndex === -1 || currentIndex === queue.length - 1) {
       console.log(`[Autoplay] Cargando música similar para: ${song.title} por ${song.artist}`);
-      
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
       const existingIds = new Set(queue.map(s => s.id));
       
       if (song.source === 'youtube') {

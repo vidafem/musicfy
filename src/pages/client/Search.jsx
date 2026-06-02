@@ -6,6 +6,7 @@ import { useLibraryStore } from '../../store/useLibraryStore';
 import { supabase } from '../../supabaseClient';
 import { fetchFromPiped, getHighResThumbnail } from '../../utils/pipedService';
 import { recommendationEngine } from '../../utils/recommendationEngine';
+import { BACKEND_URL } from '../../config';
 import './Search.css';
 
 // Caché en memoria para búsquedas instantáneas
@@ -133,7 +134,6 @@ export default function SearchPage() {
 
       // Buscar avatares oficiales ausentes en segundo plano
       if (artistsToFetch.length > 0) {
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
         Promise.allSettled(
           artistsToFetch.map(async (artist) => {
             const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`);

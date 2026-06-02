@@ -5,6 +5,7 @@ import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
 import { recommendationEngine } from '../../utils/recommendationEngine';
 import { supabase } from '../../supabaseClient';
+import { BACKEND_URL } from '../../config';
 import './Home.css';
 
 export default function Home() {
@@ -78,8 +79,6 @@ export default function Home() {
           const cached = localStorage.getItem('musicfy_taste_mix_cache');
           if (cached) mixCache = JSON.parse(cached);
         } catch (e) {}
-
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
         const fetchedSongs = [];
         let cacheChanged = false;
 
