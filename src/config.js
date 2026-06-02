@@ -8,8 +8,16 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJh
 export const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://musicfy.canonedu17.workers.dev';
 export const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://pub-c61fea6d07d64baeaf11a818a5e3f274.r2.dev';
 
-// URL del backend: prioridad a la env var, luego detección dinámica en red local, con fallback a localhost
+// Determinar si estamos en localhost o en la red local privada (Smart TV, móviles)
+const isLocalhost = typeof window !== 'undefined' && (
+  ['localhost', '127.0.0.1'].includes(window.location.hostname) ||
+  window.location.hostname.startsWith('192.168.') ||
+  window.location.hostname.startsWith('10.') ||
+  window.location.hostname.startsWith('172.')
+);
+
+// URL del backend: prioridad a la env var, luego detección dinámica en red local, con fallback a la API de Render
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.includes('vercel.app')
+  (isLocalhost
     ? `${window.location.protocol}//${window.location.hostname}:5000/api`
-    : 'http://localhost:5000/api');
+    : 'https://musicfy-api.onrender.com/api');

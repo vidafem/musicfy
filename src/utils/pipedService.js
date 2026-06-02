@@ -38,6 +38,30 @@ export function getHighResThumbnail(url) {
 }
 
 /**
+ * Helper to perform fetch with a timeout (default 10s).
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
  * Realiza consultas al backend emulando la estructura de respuesta de Piped.
  * @param {string} path - Ruta solicitada (ej. "/search?q=..." o "/streams/...")
  * @returns {Promise<any>}
@@ -60,7 +84,7 @@ export async function fetchFromPiped(path) {
       
       console.log(`[PipedProxy] Redirigiendo búsqueda al backend para: "${query}", tipo: ${type}`);
       
-      const res = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -95,7 +119,7 @@ export async function fetchFromPiped(path) {
       const videoId = cleanPath.split('/').pop();
       console.log(`[PipedProxy] Redirigiendo resolución de stream al backend para: ${videoId}`);
       
-      const res = await fetch(`${BACKEND_URL}/stream?id=${videoId}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -114,7 +138,7 @@ export async function fetchFromPiped(path) {
     }
     
     // Ruta genérica
-    const res = await fetch(`${BACKEND_URL}${cleanPath}`);
+    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`);
     return await res.json();
     
   } catch (err) {

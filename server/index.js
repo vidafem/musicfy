@@ -11,18 +11,36 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Cabecera obligatoria para permitir el acceso al espacio loopback/red privada en Chrome PNA
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Allow-Private-Network');
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
   next();
 });
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://musicfy-sigma.vercel.app'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.includes(origin) || 
+      origin.startsWith('http://192.168.') || 
+      origin.startsWith('http://10.') || 
+      origin.startsWith('http://172.') || 
+      origin.endsWith('.vercel.app');
+      
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Bloqueado por CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Inicializar la API de YouTube Music (con la corrección ortográfica de la librería)
