@@ -131,14 +131,63 @@ export const YouTubeProvider = {
   },
   
   async getStreamUrl(youtubeId) {
+    // Intento 1: Backend serverless (Vercel)
     try {
       const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`, {}, 35000)
-      if (!res.ok) throw new Error('No se pudo obtener la URL del stream')
-      const { url } = await res.json()
-      return url
+      if (res.ok) {
+        const { url } = await res.json()
+        if (url) return url
+      }
+      console.warn('[YouTubeProvider] Backend no devolvió stream, intentando Piped directo...')
     } catch (e) {
-      console.error('[YouTubeProvider] Error al obtener stream:', e)
-      throw e
+      console.warn('[YouTubeProvider] Backend falló, intentando Piped directo...', e.message)
+    }
+
+    // Intento 2: Fallback directo desde el navegador a instancias Piped públicas
+    // Los navegadores no sufren los bloqueos de IP que tienen los servidores cloud
+    const pipedInstances = [
+      'https://pipedapi.kavin.rocks',
+      'https://pipedapi.tokhmi.xyz',
+      'https://pipedapi.moomoo.me',
+      'https://pipedapi.syncpundit.io',
+      'https://api-piped.mha.fi',
+      'https://pipedapi.adminforge.de',
+      'https://pipedapi.colby.host',
+      'https://pipedapi.leptons.xyz',
+      'https://piped-api.lunar.icu',
+      'https://watchapi.whatever.social',
+      'https://pipedapi.drgns.space'
+    ]
+
+    const fetchFromPipedInstance = async (baseUrl) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000)
+      try {
+        const res = await fetch(`${baseUrl}/streams/${youtubeId}`, {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        const stream = (data.audioStreams || [])
+          .filter(s => s.url)
+          .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0]
+        if (stream?.url) return stream.url
+        throw new Error('Sin audioStreams')
+      } catch (err) {
+        clearTimeout(timeoutId)
+        throw err
+      }
+    }
+
+    try {
+      const url = await Promise.any(pipedInstances.map(inst => fetchFromPipedInstance(inst)))
+      console.log('[YouTubeProvider] ✅ Stream resuelto via Piped directo desde navegador')
+      return url
+    } catch (err) {
+      console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
+      throw new Error('No se pudo obtener la URL del stream desde ninguna fuente')
     }
   },
   

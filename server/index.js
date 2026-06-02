@@ -263,12 +263,14 @@ async function resolveStreamWithPipedParallel(id) {
     'https://pipedapi.adminforge.de',
     'https://pipedapi.colby.host',
     'https://pipedapi.leptons.xyz',
-    'https://piped-api.lunar.icu'
+    'https://piped-api.lunar.icu',
+    'https://watchapi.whatever.social',
+    'https://pipedapi.drgns.space'
   ];
 
   const fetchFromInstance = async (baseUrl) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout por espejo
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
       const response = await fetch(`${baseUrl}/streams/${id}`, {
         headers: { Accept: 'application/json' },
@@ -399,35 +401,68 @@ app.get('/api/stream', async (req, res) => {
   if (!isValidYouTubeId(id)) return res.status(400).json({ error: 'ID de video invalido' });
 
   console.log(`[Stream] Obteniendo URL de stream para video: ${id}`);
-  const resolvers = isServerless
-    ? [
-        ['piped-parallel', resolveStreamWithPipedParallel],
-        ['youtube-ext', resolveStreamWithYoutubeExt],
-        ['ytdl-core', resolveStreamWithYtdlCore]
-      ]
-    : [
-        ['youtube-ext', resolveStreamWithYoutubeExt],
-        ['ytdl-core', resolveStreamWithYtdlCore],
-        ['piped-api', resolveStreamWithPiped],
-        ['yt-dlp', resolveStreamWithYtDlp]
-      ];
 
-  const errors = [];
-  for (const [name, resolver] of resolvers) {
+  if (isServerless) {
+    // En serverless: ejecutar TODOS los resolvers en paralelo con Promise.any
+    // para que el primero que responda gane. Timeout global de 25s.
+    const resolverEntries = [
+      ['piped-parallel', () => resolveStreamWithPipedParallel(id)],
+      ['youtube-ext', () => resolveStreamWithYoutubeExt(id)],
+      ['ytdl-core', () => resolveStreamWithYtdlCore(id)]
+    ];
+
+    const resolverPromises = resolverEntries.map(async ([name, fn]) => {
+      try {
+        const url = await fn();
+        if (!url) throw new Error('URL vacía');
+        console.log(`[Stream] ✅ URL resuelta con ${name} para ${id}`);
+        return { url, source: name };
+      } catch (err) {
+        console.warn(`[Stream] ❌ ${name} fallo para ${id}:`, err.message);
+        throw err;
+      }
+    });
+
     try {
-      const url = await resolver(id);
-      console.log(`[Stream] URL resuelta con ${name} para ${id}`);
-      return res.json({ url, source: name });
-    } catch (error) {
-      errors.push(`${name}: ${error.message}`);
-      console.warn(`[Stream] ${name} fallo para ${id}:`, error.message);
+      const result = await withTimeout(
+        Promise.any(resolverPromises),
+        25000,
+        'Timeout global de resolución de stream'
+      );
+      return res.json(result);
+    } catch (err) {
+      console.error(`[Stream] Todos los resolvers fallaron para ${id}:`, err.message);
+      return res.status(503).json({
+        error: 'No se pudo extraer la URL del stream de audio.',
+        details: err.errors ? err.errors.map(e => e.message) : [err.message]
+      });
     }
-  }
+  } else {
+    // En modo local: ejecución secuencial con fallbacks (más opciones disponibles)
+    const resolvers = [
+      ['youtube-ext', resolveStreamWithYoutubeExt],
+      ['ytdl-core', resolveStreamWithYtdlCore],
+      ['piped-api', resolveStreamWithPiped],
+      ['yt-dlp', resolveStreamWithYtDlp]
+    ];
 
-  res.status(503).json({
-    error: 'No se pudo extraer la URL del stream de audio.',
-    details: errors
-  });
+    const errors = [];
+    for (const [name, resolver] of resolvers) {
+      try {
+        const url = await resolver(id);
+        console.log(`[Stream] URL resuelta con ${name} para ${id}`);
+        return res.json({ url, source: name });
+      } catch (error) {
+        errors.push(`${name}: ${error.message}`);
+        console.warn(`[Stream] ${name} fallo para ${id}:`, error.message);
+      }
+    }
+
+    res.status(503).json({
+      error: 'No se pudo extraer la URL del stream de audio.',
+      details: errors
+    });
+  }
 });
 
 if (!isServerless) {
