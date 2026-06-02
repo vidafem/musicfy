@@ -15,7 +15,9 @@ class GlassElement extends HTMLElement {
         // Detectar soporte de filtros SVG en backdrop-filter (solo una vez por clase)
         if (GlassElement._svgFilterSupport === undefined) {
             GlassElement._svgFilterSupport = this.detectSVGFilterSupport();
-            console.log(`[GlassElement] SVG Filter Support: ${GlassElement._svgFilterSupport ? '✅ YES' : '❌ NO'} (${navigator.userAgent.match(/(chrome|firefox|safari|edg)/i)?.[0] || 'unknown'})`);
+            const matchUA = navigator.userAgent.match(/(chrome|firefox|safari|edg)/i);
+            const browserName = matchUA ? matchUA[0] : 'unknown';
+            console.log(`[GlassElement] SVG Filter Support: ${GlassElement._svgFilterSupport ? '✅ YES' : '❌ NO'} (${browserName})`);
         }
     }
 

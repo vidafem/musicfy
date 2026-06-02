@@ -65,6 +65,7 @@ if (typeof document !== 'undefined') {
 class SpatialNavigation {
   constructor() {
     this.isActive = false;
+    this.handleKeyDown = this.handleKeyDown.bind(this);
   }
 
   start() {
@@ -109,7 +110,7 @@ class SpatialNavigation {
     });
   }
 
-  handleKeyDown = (e) => {
+  handleKeyDown(e) {
     const code = e.keyCode;
     let direction = null;
 
@@ -122,7 +123,7 @@ class SpatialNavigation {
       e.preventDefault();
       this.moveFocus(direction);
     }
-  };
+  }
 
   moveFocus(direction) {
     const active = document.activeElement;
