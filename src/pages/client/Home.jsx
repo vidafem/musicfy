@@ -95,7 +95,7 @@ export default function Home() {
               fetchedSongs.push(...mixCache[artist]);
             } else {
               console.log(`[Home] Artista favorito "${artist}" sin suficientes canciones locales. Buscando en YouTube Music...`);
-              const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=song`);
+              const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=song`, {}, 15000);
               if (res.ok) {
                 const data = await res.json();
                 const artistSongs = (data.items || []).slice(0, 12).map(item => {

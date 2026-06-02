@@ -76,7 +76,7 @@ export default function PlaylistDetail() {
       loadLikedSongsDetail();
     } else if (!isUuid && id) {
       setExternalLoading(true);
-      fetchWithTimeout(`${BACKEND_URL}/playlist/tracks?id=${id}`)
+      fetchWithTimeout(`${BACKEND_URL}/playlist/tracks?id=${id}`, {}, 30000)
         .then(res => res.json())
         .then(data => {
           setExternalPlaylist({

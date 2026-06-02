@@ -61,7 +61,7 @@ export async function fetchFromPiped(path) {
       
       console.log(`[PipedProxy] Redirigiendo búsqueda al backend para: "${query}", tipo: ${type}`);
       
-      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`, {}, 15000);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -96,7 +96,7 @@ export async function fetchFromPiped(path) {
       const videoId = cleanPath.split('/').pop();
       console.log(`[PipedProxy] Redirigiendo resolución de stream al backend para: ${videoId}`);
       
-      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`, {}, 35000);
       if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
       
       const data = await res.json();
@@ -115,7 +115,7 @@ export async function fetchFromPiped(path) {
     }
     
     // Ruta genérica
-    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`);
+    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`, {}, 20000);
     return await res.json();
     
   } catch (err) {

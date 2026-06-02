@@ -137,7 +137,7 @@ export default function SearchPage() {
       if (artistsToFetch.length > 0) {
         Promise.allSettled(
           artistsToFetch.map(async (artist) => {
-            const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`);
+            const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`, {}, 15000);
             if (res.ok) {
               const data = await res.json();
               const firstArtist = data.items?.[0];

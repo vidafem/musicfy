@@ -120,7 +120,7 @@ export const YouTubeProvider = {
   
   async search(query, limit = 10) {
     try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`, {}, 15000)
       if (!res.ok) return []
       const data = await res.json()
       return (data.items || []).map(normalizeYouTube)
@@ -132,7 +132,7 @@ export const YouTubeProvider = {
   
   async getStreamUrl(youtubeId) {
     try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`, {}, 35000)
       if (!res.ok) throw new Error('No se pudo obtener la URL del stream')
       const { url } = await res.json()
       return url
@@ -145,7 +145,7 @@ export const YouTubeProvider = {
   async getMetadata(youtubeId) {
     // Si no está soportado en backend, retornar null o consultar metadata
     try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/metadata/${youtubeId}`)
+      const res = await fetchWithTimeout(`${BACKEND_URL}/metadata/${youtubeId}`, {}, 15000)
       if (!res.ok) return null
       return res.json()
     } catch {

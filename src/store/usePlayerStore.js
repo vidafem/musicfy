@@ -438,7 +438,7 @@ export const usePlayerStore = create((set, get) => ({
       
       if (song.source === 'youtube') {
         try {
-          const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(song.artist)}&type=song`);
+          const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(song.artist)}&type=song`, {}, 15000);
           if (res.ok) {
             const data = await res.json();
             const newSongs = (data.items || []).map(item => {
