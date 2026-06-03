@@ -27,6 +27,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   const setIsFullScreen = usePlayerStore(state => state.setIsFullScreen);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const loadedSongIdRef = useRef(null);
   
   const currentSong = usePlayerStore(state => state.currentSong);
   const queue = usePlayerStore(state => state.queue);
@@ -67,8 +68,9 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
   const [showVideo, setShowVideo] = useState(false);
 
-  // Auto-activar modo video si la canción es un video
+  // Auto-activar modo video si la canción es un video y limpiar estado de carga del track
   useEffect(() => {
+    loadedSongIdRef.current = null;
     if (currentSong) {
       const isVideoSong = Boolean(currentSong.is_video || currentSong.video_url);
       setShowVideo(isVideoSong);
@@ -287,6 +289,14 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
     const interval = setInterval(() => {
       try {
+        // Ignorar actualizaciones si el player está en transición, cargando o cargado con otro ID
+        const state = typeof ytPlayer.getPlayerState === 'function' ? ytPlayer.getPlayerState() : -1;
+        if (state === -1 || state === 3 || state === 5) return;
+
+        const videoData = typeof ytPlayer.getVideoData === 'function' ? ytPlayer.getVideoData() : null;
+        const currentVideoId = videoData ? videoData.video_id : null;
+        if (currentVideoId && currentVideoId !== youtubeId) return;
+
         const currTime = ytPlayer.getCurrentTime();
         const dur = ytPlayer.getDuration();
         if (Number.isFinite(currTime)) {
@@ -433,12 +443,17 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     const isMain = (activeChannel === 'A' && audio === audioARef.current) || (activeChannel === 'B' && audio === audioBRef.current);
     if (isMain && audio.duration) setDuration(audio.duration);
     else if (audio.duration) setNextDuration(audio.duration);
+
+    if (isMain && currentSong) {
+      loadedSongIdRef.current = currentSong.id;
+    }
   };
 
   const handleTimeUpdate = (e) => {
     const audio = e.target;
     if (audio.readyState < 2) return;
     if (!currentSong) return;
+    if (loadedSongIdRef.current !== currentSong.id) return;
 
     // Si el src del elemento de audio no coincide con el de la canción actual, ignorar el evento de tiempo.
     // Esto previene que eventos de la canción anterior sobrescriban el currentTime inicial (0).
