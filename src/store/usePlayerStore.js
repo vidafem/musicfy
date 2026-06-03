@@ -514,17 +514,16 @@ export const usePlayerStore = create((set, get) => ({
   playSong: async (song) => {
     const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback, queue } = get();
 
-    // NUEVO: Intentar obtener versión offline primero si estamos desconectados
+    // NUEVO: Intentar obtener versión offline primero para reproducción inmediata y ahorro de red
     try {
       const { OfflineManager } = await import('../lib/offlineManager');
-      const isOnline = await OfflineManager.isOnline();
-      
-      if (!isOnline) {
-        const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
-        if (offlineUrl) {
-          console.log('[Player] Cargando versión offline de:', song.title);
-          song = { ...song, url: offlineUrl, is_offline: true };
-        } else {
+      const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
+      if (offlineUrl) {
+        console.log('[Player] Cargando versión offline descargada de:', song.title);
+        song = { ...song, url: offlineUrl, is_offline: true };
+      } else {
+        const isOnline = await OfflineManager.isOnline();
+        if (!isOnline) {
           console.warn('[Player] Dispositivo offline y pista no descargada:', song.title);
           return; // Detener reproducción si no hay conectividad ni versión local
         }
