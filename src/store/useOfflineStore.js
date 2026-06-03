@@ -72,12 +72,18 @@ export const useOfflineStore = create((set, get) => {
     },
 
     downloadSong: async (song) => {
-      if (!song || !song.url) return;
+      if (!song) return;
       const { downloadedIds, downloadedMetadata, activeDownloads } = get();
       
       if (downloadedIds.includes(song.id) || activeDownloads.has(song.id)) {
         return; // Ya descargada o descargándose
       }
+
+      const isYouTube = song.source === 'youtube' || song.is_external || (song.url && (song.url.includes('youtube.com') || song.url.includes('youtu.be') || song.url === 'youtube_stream'));
+      let playableUrl = song.url;
+      const originalUrl = song.url || (isYouTube ? `https://www.youtube.com/watch?v=${song.youtube_id || song.id}` : null);
+
+      if (!originalUrl) return;
 
       // Añadir a descargas activas
       set((state) => {
@@ -94,9 +100,20 @@ export const useOfflineStore = create((set, get) => {
 
         const cache = await caches.open(CACHE_NAME);
 
+        // Si es de YouTube o no tiene url de stream directa, resolverla primero
+        if (isYouTube || !playableUrl || playableUrl === 'youtube_stream') {
+          const { HybridMusicProvider } = await import('../providers/MusicProvider');
+          playableUrl = await HybridMusicProvider.getPlayableUrl(song);
+          if (!playableUrl || playableUrl === 'youtube_iframe_fallback') {
+            throw new Error('No se pudo obtener la URL de audio directo para descargar esta pista.');
+          }
+        }
+
+        const songWithOriginalUrl = { ...song, url: originalUrl };
+
         // 1. Descarga del archivo MP3 con reporte de progreso
         console.log(`[Offline] Iniciando descarga de: ${song.title}`);
-        const response = await fetch(song.url);
+        const response = await fetch(playableUrl);
         if (!response.ok) throw new Error('Error al descargar el archivo de audio');
 
         const reader = response.body.getReader();
@@ -125,7 +142,7 @@ export const useOfflineStore = create((set, get) => {
         const audioResponse = new Response(audioBlob, {
           headers: response.headers
         });
-        await cache.put(song.url, audioResponse);
+        await cache.put(originalUrl, audioResponse);
 
         // 2. Descarga de la portada (de forma paralela simple)
         if (song.cover_url) {
@@ -152,7 +169,7 @@ export const useOfflineStore = create((set, get) => {
         // 3. Actualizar estados locales y persistencia
         const newIds = [...downloadedIds, song.id];
         // Guardamos metadatos de la canción sin alterar para poder recrear la lista en offline
-        const newMeta = [...downloadedMetadata, song];
+        const newMeta = [...downloadedMetadata, songWithOriginalUrl];
 
         localStorage.setItem('musicfy_downloaded_ids', JSON.stringify(newIds));
         localStorage.setItem('musicfy_offline_metadata', JSON.stringify(newMeta));

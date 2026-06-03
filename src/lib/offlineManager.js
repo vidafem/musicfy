@@ -22,12 +22,22 @@ export const OfflineManager = {
       await Filesystem.mkdir({ path: DOWNLOAD_FOLDER, directory: DOWNLOAD_DIR, recursive: true })
         .catch(() => {}) // Ignorar error si ya existe
       
+      const isYouTube = song.source === 'youtube' || song.is_external || (song.url && (song.url.includes('youtube.com') || song.url.includes('youtu.be') || song.url === 'youtube_stream'));
+      let playableUrl = song.url;
+      if (isYouTube || !playableUrl || playableUrl === 'youtube_stream') {
+        const { HybridMusicProvider } = await import('../providers/MusicProvider');
+        playableUrl = await HybridMusicProvider.getPlayableUrl(song);
+        if (!playableUrl || playableUrl === 'youtube_iframe_fallback') {
+          throw new Error('No se pudo obtener la URL de audio directo para descargar esta pista.');
+        }
+      }
+
       // Descargar el archivo de audio
       const audioPath = `${DOWNLOAD_FOLDER}/${song.id}.mp3`
       onProgress?.({ step: 'audio', percent: 0 })
       
       // Descargar en chunks para poder mostrar progreso
-      const response = await fetch(song.url)
+      const response = await fetch(playableUrl)
       if (!response.ok) throw new Error('Fallo al descargar el archivo de música remota')
       const reader = response.body.getReader()
       const chunks = []
@@ -110,8 +120,26 @@ export const OfflineManager = {
       const audioPath = `${DOWNLOAD_FOLDER}/${songId}.mp3`
       const result = await Filesystem.readFile({ path: audioPath, directory: DOWNLOAD_DIR })
       return `data:audio/mpeg;base64,${result.data}`
-    } catch {
-      return null
+    } catch (e) {
+      // Fallback para navegador web (Cache API)
+      try {
+        const stored = localStorage.getItem('musicfy_offline_metadata');
+        if (stored) {
+          const metadata = JSON.parse(stored);
+          const song = metadata.find(s => s.id === songId);
+          if (song && song.url && 'caches' in window) {
+            const cache = await caches.open('musicfy-audio-cache-v1');
+            const cachedResponse = await cache.match(song.url);
+            if (cachedResponse) {
+              const blob = await cachedResponse.blob();
+              return URL.createObjectURL(blob);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[OfflineManager] Fallback de caché falló:', err);
+      }
+      return null;
     }
   },
   
