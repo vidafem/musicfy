@@ -264,8 +264,7 @@ async function resolveStreamWithPipedParallel(id) {
     'https://pipedapi.colby.host',
     'https://pipedapi.leptons.xyz',
     'https://piped-api.lunar.icu',
-    'https://watchapi.whatever.social',
-    'https://pipedapi.drgns.space'
+    'https://watchapi.whatever.social'
   ];
 
   const fetchFromInstance = async (baseUrl) => {
@@ -294,6 +293,93 @@ async function resolveStreamWithPipedParallel(id) {
     return await Promise.any(instances.map(url => fetchFromInstance(url)));
   } catch (err) {
     throw new Error('Todos los espejos de Piped fallaron');
+  }
+}
+
+async function resolveStreamWithInvidious(id) {
+  const instances = [
+    'https://inv.nadeko.net',
+    'https://invidious.fdn.fr',
+    'https://inv.tux.pizza',
+    'https://invidious.protokoll-11.de',
+    'https://iv.ggtyler.dev',
+    'https://invidious.privacyredirect.com',
+    'https://invidious.lunar.icu',
+    'https://vid.puffyan.us',
+    'https://invidious.nerdvpn.de'
+  ];
+
+  const fetchFromInstance = async (baseUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/videos/${id}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      // Invidious returns adaptiveFormats with audio
+      const audioFormats = (data.adaptiveFormats || [])
+        .filter((f) => f.type && f.type.startsWith('audio/') && f.url)
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+      if (audioFormats.length > 0 && audioFormats[0].url) return audioFormats[0].url;
+      throw new Error('Sin formatos de audio en Invidious');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  try {
+    return await Promise.any(instances.map(url => fetchFromInstance(url)));
+  } catch (err) {
+    throw new Error('Todos los espejos de Invidious fallaron');
+  }
+}
+
+async function resolveStreamWithCobalt(id) {
+  const cobaltInstances = [
+    'https://api.cobalt.tools',
+    'https://cobalt-api.hyper.lol',
+    'https://cobalt.api.timelessnesses.me'
+  ];
+
+  const fetchFromCobalt = async (baseUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${id}`,
+          downloadMode: 'audio',
+          audioFormat: 'best'
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      // Cobalt returns { status: 'tunnel'|'redirect', url: '...' }
+      if (data.url) return data.url;
+      if (data.audio) return data.audio;
+      throw new Error('Cobalt no devolvió URL: ' + JSON.stringify(data.status || data));
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  try {
+    return await Promise.any(cobaltInstances.map(url => fetchFromCobalt(url)));
+  } catch (err) {
+    throw new Error('Todos los espejos de Cobalt fallaron');
   }
 }
 
@@ -406,6 +492,8 @@ app.get('/api/stream', async (req, res) => {
     // En serverless: ejecutar TODOS los resolvers en paralelo con Promise.any
     // para que el primero que responda gane. Timeout global de 25s.
     const resolverEntries = [
+      ['cobalt', () => resolveStreamWithCobalt(id)],
+      ['invidious', () => resolveStreamWithInvidious(id)],
       ['piped-parallel', () => resolveStreamWithPipedParallel(id)],
       ['youtube-ext', () => resolveStreamWithYoutubeExt(id)],
       ['ytdl-core', () => resolveStreamWithYtdlCore(id)]

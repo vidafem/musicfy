@@ -131,64 +131,66 @@ export const YouTubeProvider = {
   },
   
   async getStreamUrl(youtubeId) {
-    // Intento 1: Backend serverless (Vercel)
+    // Intento 1: Backend serverless (Vercel) — usa Cobalt + Invidious + Piped + ytdl en paralelo
     try {
       const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`, {}, 35000)
       if (res.ok) {
         const { url } = await res.json()
-        if (url) return url
+        if (url) {
+          console.log('[YouTubeProvider] ✅ Stream resuelto via backend')
+          return url
+        }
       }
-      console.warn('[YouTubeProvider] Backend no devolvió stream, intentando Piped directo...')
+      console.warn('[YouTubeProvider] Backend no devolvió stream, intentando Worker proxy...')
     } catch (e) {
-      console.warn('[YouTubeProvider] Backend falló, intentando Piped directo...', e.message)
+      console.warn('[YouTubeProvider] Backend falló, intentando Worker proxy...', e.message)
     }
 
-    // Intento 2: Fallback directo desde el navegador a instancias Piped públicas
-    // Los navegadores no sufren los bloqueos de IP que tienen los servidores cloud
-    const pipedInstances = [
-      'https://pipedapi.kavin.rocks',
-      'https://pipedapi.tokhmi.xyz',
-      'https://pipedapi.moomoo.me',
-      'https://pipedapi.syncpundit.io',
-      'https://api-piped.mha.fi',
-      'https://pipedapi.adminforge.de',
-      'https://pipedapi.colby.host',
-      'https://pipedapi.leptons.xyz',
-      'https://piped-api.lunar.icu',
-      'https://watchapi.whatever.social',
-      'https://pipedapi.drgns.space'
+    // Intento 2: Proxy liviano de Piped/Invidious (función serverless separada, sin deps pesadas)
+    try {
+      const isLocal = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      const proxyBase = isLocal ? 'http://localhost:5000' : ''
+      const proxyUrl = `${proxyBase}/api/piped-proxy?id=${youtubeId}`
+      const res = await fetchWithTimeout(proxyUrl, {}, 15000)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.url) {
+          console.log('[YouTubeProvider] ✅ Stream resuelto via piped-proxy')
+          return data.url
+        }
+      }
+    } catch (e) {
+      console.warn('[YouTubeProvider] Piped proxy falló:', e.message)
+    }
+
+    // Intento 3: Invidious directo (algunas instancias sí soportan CORS)
+    const invidiousInstances = [
+      'https://inv.nadeko.net',
+      'https://invidious.fdn.fr',
+      'https://inv.tux.pizza',
+      'https://iv.ggtyler.dev'
     ]
 
-    const fetchFromPipedInstance = async (baseUrl) => {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 8000)
+    for (const instance of invidiousInstances) {
       try {
-        const res = await fetch(`${baseUrl}/streams/${youtubeId}`, {
-          headers: { Accept: 'application/json' },
-          signal: controller.signal
-        })
-        clearTimeout(timeoutId)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const res = await fetchWithTimeout(`${instance}/api/v1/videos/${youtubeId}`, {
+          headers: { Accept: 'application/json' }
+        }, 8000)
+        if (!res.ok) continue
         const data = await res.json()
-        const stream = (data.audioStreams || [])
-          .filter(s => s.url)
+        const audio = (data.adaptiveFormats || [])
+          .filter(f => f.type?.startsWith('audio/') && f.url)
           .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0]
-        if (stream?.url) return stream.url
-        throw new Error('Sin audioStreams')
-      } catch (err) {
-        clearTimeout(timeoutId)
-        throw err
-      }
+        if (audio?.url) {
+          console.log(`[YouTubeProvider] ✅ Stream resuelto via Invidious (${instance})`)
+          return audio.url
+        }
+      } catch { /* intentar siguiente */ }
     }
 
-    try {
-      const url = await Promise.any(pipedInstances.map(inst => fetchFromPipedInstance(inst)))
-      console.log('[YouTubeProvider] ✅ Stream resuelto via Piped directo desde navegador')
-      return url
-    } catch (err) {
-      console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
-      throw new Error('No se pudo obtener la URL del stream desde ninguna fuente')
-    }
+    console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
+    throw new Error('No se pudo obtener la URL del stream desde ninguna fuente')
   },
   
   async getMetadata(youtubeId) {
