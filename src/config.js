@@ -17,13 +17,24 @@ const isLocalhost = typeof window !== 'undefined' && (
 );
 
 // URL del backend:
-// 1. Prioridad: variable de entorno VITE_BACKEND_URL (apunta a Render en producción)
+// 1. Prioridad: variable de entorno VITE_BACKEND_URL (apunta a Render en producción, sanitizada)
 // 2. Si estamos en red local, usar el backend local en el mismo host
 // 3. Fallback a /api (Vercel serverless, limitado)
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-  (isLocalhost
+const getBackendUrl = () => {
+  let url = import.meta.env.VITE_BACKEND_URL;
+  if (url) {
+    url = url.trim().replace(/\/+$/, ''); // Eliminar barras diagonales al final
+    if (!url.endsWith('/api')) {
+      url = `${url}/api`;
+    }
+    return url;
+  }
+  return isLocalhost
     ? `${window.location.protocol}//${window.location.hostname}:5000/api`
-    : '/api');
+    : '/api';
+};
+
+export const BACKEND_URL = getBackendUrl();
 
 // Advertir al usuario en la consola si está en producción pero usa las funciones de Vercel
 if (typeof window !== 'undefined' && !isLocalhost && BACKEND_URL === '/api') {
