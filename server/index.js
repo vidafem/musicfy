@@ -298,7 +298,10 @@ async function resolveStreamWithPipedParallel(id) {
 
 async function resolveStreamWithInvidious(id) {
   const instances = [
+    'https://yewtu.be',
     'https://inv.nadeko.net',
+    'https://invidious.projectsegfau.lt',
+    'https://invidious.privacydev.net',
     'https://invidious.fdn.fr',
     'https://inv.tux.pizza',
     'https://invidious.protokoll-11.de',
@@ -306,7 +309,8 @@ async function resolveStreamWithInvidious(id) {
     'https://invidious.privacyredirect.com',
     'https://invidious.lunar.icu',
     'https://vid.puffyan.us',
-    'https://invidious.nerdvpn.de'
+    'https://invidious.nerdvpn.de',
+    'https://invidious.slipfox.xyz'
   ];
 
   const fetchFromInstance = async (baseUrl) => {
@@ -488,7 +492,8 @@ app.get('/api/stream', async (req, res) => {
 
   console.log(`[Stream] Obteniendo URL de stream para video: ${id}`);
 
-  if (isServerless) {
+  const useParallelResolvers = isServerless || Boolean(process.env.RENDER);
+  if (useParallelResolvers) {
     // En serverless: ejecutar TODOS los resolvers en paralelo con Promise.any
     // para que el primero que responda gane. Timeout global de 25s.
     const resolverEntries = [
