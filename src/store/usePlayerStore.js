@@ -544,8 +544,8 @@ export const usePlayerStore = create((set, get) => ({
         const { HybridMusicProvider } = await import('../providers/MusicProvider');
         playableUrl = await HybridMusicProvider.getPlayableUrl(song);
       } catch (e) {
-        console.error('[Player] Error al obtener URL de stream YouTube:', e);
-        return;
+        console.warn('[Player] Backend stream resolution failed, falling back to client-side YouTube Iframe:', e.message);
+        playableUrl = 'youtube_iframe_fallback';
       }
     } else if (song.url && !song.url.startsWith('data:') && !song.url.startsWith('blob:') && !isYouTube) {
       const { CacheManager } = await import('../utils/cacheManager');

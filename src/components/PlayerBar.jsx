@@ -58,6 +58,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   const setMixerState = usePlayerStore(state => state.setMixerState);
   const clearMixerState = usePlayerStore(state => state.clearMixerState);
   const user = useAuthStore(state => state.user);
+  const useYtIframeAudio = currentSong?.source === 'youtube' && (currentSong?.url === 'youtube_iframe_fallback' || !currentSong?.url);
   
   const showDeviceSelector = usePlayerStore(state => state.showDeviceSelector);
   const setShowDeviceSelector = usePlayerStore(state => state.setShowDeviceSelector);
@@ -154,9 +155,9 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Cargar YouTube Iframe API e inicializar reproductor embebido mutado
+  // Cargar YouTube Iframe API e inicializar reproductor embebido
   useEffect(() => {
-    if (!showVideo || !youtubeId) {
+    if (!youtubeId) {
       setYtPlayer(null);
       return;
     }
@@ -193,7 +194,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
           rel: 0,
           showinfo: 0,
           iv_load_policy: 3,
-          mute: 1, // Muteado para que suene el MP3 de alta calidad
+          mute: useYtIframeAudio ? 0 : 1, // Desmuteado si usamos audio del iframe
           enablejsapi: 1,
           origin: window.location.origin
         },
@@ -204,13 +205,25 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
               return;
             }
             setYtPlayer(event.target);
-            event.target.mute();
+            if (useYtIframeAudio) {
+              event.target.unMute();
+              event.target.setVolume(volume * 100);
+            } else {
+              event.target.mute();
+            }
             if (isPlaying) {
               event.target.playVideo();
             } else {
               event.target.pauseVideo();
             }
             event.target.seekTo(localCurrentTime, true);
+          },
+          onStateChange: (event) => {
+            if (event.data === window.YT?.PlayerState?.ENDED) {
+              if (isMasterDevice) {
+                playNext();
+              }
+            }
           }
         }
       });
@@ -252,7 +265,42 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
       }
       setYtPlayer(null);
     };
-  }, [showVideo, youtubeId]);
+  }, [youtubeId, useYtIframeAudio]);
+
+  // Sincronizar Mute y Volumen del reproductor de YouTube
+  useEffect(() => {
+    if (ytPlayer && ytPlayer.setVolume) {
+      try {
+        if (useYtIframeAudio) {
+          ytPlayer.unMute();
+          ytPlayer.setVolume(volume * 100);
+        } else {
+          ytPlayer.mute();
+        }
+      } catch (e) {}
+    }
+  }, [ytPlayer, useYtIframeAudio, volume]);
+
+  // Sincronizar progreso de reproducción para el reproductor de YouTube (cuando usamos audio del iframe)
+  useEffect(() => {
+    if (!ytPlayer || !isPlaying || !isMasterDevice || !youtubeId || !useYtIframeAudio) return;
+
+    const interval = setInterval(() => {
+      try {
+        const currTime = ytPlayer.getCurrentTime();
+        const dur = ytPlayer.getDuration();
+        if (Number.isFinite(currTime)) {
+          setCurrentTime(currTime);
+          setLocalCurrentTime(currTime);
+        }
+        if (Number.isFinite(dur) && dur > 0) {
+          setDuration(dur);
+        }
+      } catch (e) {}
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [ytPlayer, isPlaying, isMasterDevice, youtubeId, useYtIframeAudio]);
 
   // Sincronizar Play/Pause del video con la música
   useEffect(() => {
@@ -299,7 +347,19 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   useEffect(() => {
     const main = audioARef.current;
     const sec = audioBRef.current;
-    if (!main || !sec || !currentSong || isMixingRef.current) return;
+    if (!main || !sec) return;
+
+    if (useYtIframeAudio) {
+      // Si usamos el audio del iframe de YouTube, limpiar y silenciar los audios locales
+      main.pause();
+      sec.pause();
+      main.src = '';
+      sec.src = '';
+      main.muted = sec.muted = true;
+      return;
+    }
+
+    if (!currentSong || isMixingRef.current) return;
 
     const activeAudio = activeChannel === 'A' ? main : sec;
     const normalize = (url) => { try { return new URL(url).pathname + new URL(url).search; } catch { return url; } };
@@ -308,13 +368,18 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
       activeAudio.src = currentSong.url;
       if (isPlaying && activeDeviceId === deviceId) activeAudio.play().catch(() => {});
     }
-  }, [currentSong?.id, activeChannel, activeDeviceId, deviceId, isPlaying]);
+  }, [currentSong?.id, activeChannel, activeDeviceId, deviceId, isPlaying, useYtIframeAudio]);
 
   // Sincronizar PLAY/PAUSE
   useEffect(() => {
     const main = audioARef.current;
     const sec = audioBRef.current;
     if (!main || !sec) return;
+    if (useYtIframeAudio) {
+      main.pause();
+      sec.pause();
+      return;
+    }
     const isMaster = !activeDeviceId || activeDeviceId === deviceId;
 
     if (isPlaying) {
@@ -328,7 +393,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     } else {
       main.pause(); sec.pause();
     }
-  }, [isPlaying, activeChannel, activeDeviceId, deviceId]);
+  }, [isPlaying, activeChannel, activeDeviceId, deviceId, useYtIframeAudio]);
 
   // Reloj de predicción para espejos
   useEffect(() => {
@@ -458,8 +523,15 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time, true); // true indica que viene de la UI y debe propagarse
-    const activeAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
-    if (activeAudio && isMasterDevice) activeAudio.currentTime = time;
+    
+    if (useYtIframeAudio && ytPlayer && ytPlayer.seekTo) {
+      try {
+        ytPlayer.seekTo(time, true);
+      } catch (err) {}
+    } else {
+      const activeAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
+      if (activeAudio && isMasterDevice) activeAudio.currentTime = time;
+    }
   };
 
   const formatTime = (time) => {
@@ -505,29 +577,39 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
         )}
 
         {/* FONDO: VIDEO o imagen dinámica */}
-        {showVideo && hasVideo ? (
-          <div className="fs-video-bg">
-            {youtubeId ? (
-              <>
-                <div id="yt-video-player" style={{ width: '100%', height: '100%' }}></div>
-                {/* Capa transparente para bloquear interacción con iframe YT */}
-                <div style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'transparent' }} />
-              </>
-            ) : (
-              <video
-                ref={videoRef}
-                src={currentSong.video_url}
-                autoPlay={isPlaying}
-                playsInline
-                muted
-                loop
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            )}
-            {/* Overlay oscuro sobre el video para legibilidad de controles */}
+        {youtubeId && (
+          <div 
+            className="fs-video-bg" 
+            style={
+              showVideo && hasVideo 
+                ? { display: 'block', position: 'absolute', inset: 0, zIndex: 1 } 
+                : { position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none', zIndex: -1000 }
+            }
+          >
+            <div id="yt-video-player" style={{ width: '100%', height: '100%' }}></div>
+            <div style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'transparent' }} />
             <div className="fs-video-overlay" />
           </div>
-        ) : (
+        )}
+
+        {/* Video local de fallback */}
+        {showVideo && hasVideo && !youtubeId && currentSong.video_url && (
+          <div className="fs-video-bg">
+            <video
+              ref={videoRef}
+              src={currentSong.video_url}
+              autoPlay={isPlaying}
+              playsInline
+              muted
+              loop
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+            <div className="fs-video-overlay" />
+          </div>
+        )}
+
+        {/* Fondos estáticos */}
+        {!(showVideo && hasVideo) && (
           <>
             <div className={`fs-bg ${uiTransition ? 'fading-out' : ''}`} style={{ backgroundImage: `url(${currentSong.background_url || currentSong.cover_url})` }}></div>
             {nextSongInfo && <div className={`fs-bg next-bg ${uiTransition ? 'visible' : ''}`} style={{ backgroundImage: `url(${nextSongInfo.background_url || nextSongInfo.cover_url})` }}></div>}

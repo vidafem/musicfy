@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import ytdl from '@distube/ytdl-core';
-import { search as ytSearch, videoInfo, getFormats } from 'youtube-ext';
+import { search as ytSearch, videoInfo, getFormats, playlistInfo } from 'youtube-ext';
 
 dotenv.config();
 
@@ -440,50 +440,83 @@ app.get('/api/playlist/tracks', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Falta el parametro de ID de playlist (id)' });
 
   const cleanId = String(id).startsWith('VL') ? String(id).substring(2) : String(id);
-  const playlistUrl = `https://www.youtube.com/playlist?list=${cleanId}`;
-  const localYtdlp = path.join(process.cwd(), 'yt-dlp.exe');
-  const executable = fs.existsSync(localYtdlp) ? localYtdlp : 'yt-dlp';
+  console.log(`[PlaylistTracks] Obteniendo canciones para playlist: ${cleanId}`);
 
-  execFile(executable, ['--dump-single-json', '--flat-playlist', playlistUrl], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`[PlaylistTracks] Error al ejecutar yt-dlp para ${id}:`, error);
-      return res.status(200).json({
-        title: 'Playlist de YouTube',
-        description: '',
-        trackCount: 0,
-        cover_url: '',
-        tracks: [],
-        error: stderr || error.message
-      });
-    }
+  try {
+    // 1. Intentar con youtube-ext (Bypass directo sin dependencias externas del SO, funciona en Render)
+    const playlistUrl = `https://www.youtube.com/playlist?list=${cleanId}`;
+    const data = await playlistInfo(playlistUrl);
+    
+    const tracks = (data.videos || []).map((video, idx) => ({
+      id: video.id,
+      title: video.title,
+      artist: video.channel?.name || 'Artista Desconocido',
+      cover_url: bestThumbnail(video.thumbnails),
+      url: null,
+      source: 'youtube',
+      youtube_id: video.id,
+      is_external: true,
+      is_video: false,
+      duration: parseInt(video.duration?.lengthSec || '0', 10),
+      position: idx + 1
+    }));
 
-    try {
-      const data = JSON.parse(stdout);
-      const tracks = (data.entries || []).map((entry, idx) => ({
-        id: entry.id,
-        title: entry.title,
-        artist: entry.uploader || entry.channel || 'Artista Desconocido',
-        cover_url: bestThumbnail(entry.thumbnails),
-        url: null,
-        source: 'youtube',
-        youtube_id: entry.id,
-        is_external: true,
-        is_video: false,
-        duration: entry.duration || 0,
-        position: idx + 1
-      }));
+    return res.json({
+      title: data.title || 'Playlist de YouTube',
+      description: data.description || '',
+      trackCount: tracks.length,
+      cover_url: tracks[0]?.cover_url || '',
+      tracks
+    });
+  } catch (err) {
+    console.warn(`[PlaylistTracks] youtube-ext falló para ${cleanId}, intentando fallback yt-dlp...`, err.message);
+    
+    // 2. Fallback a yt-dlp (para entorno local con ejecutable)
+    const playlistUrl = `https://www.youtube.com/playlist?list=${cleanId}`;
+    const localYtdlp = path.join(process.cwd(), 'yt-dlp.exe');
+    const executable = fs.existsSync(localYtdlp) ? localYtdlp : 'yt-dlp';
 
-      res.json({
-        title: data.title || 'Playlist de YouTube',
-        description: data.description || '',
-        trackCount: tracks.length,
-        cover_url: tracks[0]?.cover_url || '',
-        tracks
-      });
-    } catch (err) {
-      res.status(200).json({ title: 'Playlist de YouTube', trackCount: 0, tracks: [], error: err.message });
-    }
-  });
+    execFile(executable, ['--dump-single-json', '--flat-playlist', playlistUrl], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`[PlaylistTracks] Fallback yt-dlp también falló para ${id}:`, error.message);
+        return res.status(200).json({
+          title: 'Playlist de YouTube',
+          description: '',
+          trackCount: 0,
+          cover_url: '',
+          tracks: [],
+          error: stderr || error.message
+        });
+      }
+
+      try {
+        const data = JSON.parse(stdout);
+        const tracks = (data.entries || []).map((entry, idx) => ({
+          id: entry.id,
+          title: entry.title,
+          artist: entry.uploader || entry.channel || 'Artista Desconocido',
+          cover_url: bestThumbnail(entry.thumbnails),
+          url: null,
+          source: 'youtube',
+          youtube_id: entry.id,
+          is_external: true,
+          is_video: false,
+          duration: entry.duration || 0,
+          position: idx + 1
+        }));
+
+        res.json({
+          title: data.title || 'Playlist de YouTube',
+          description: data.description || '',
+          trackCount: tracks.length,
+          cover_url: tracks[0]?.cover_url || '',
+          tracks
+        });
+      } catch (err2) {
+        res.status(200).json({ title: 'Playlist de YouTube', trackCount: 0, tracks: [], error: err2.message });
+      }
+    });
+  }
 });
 
 app.get('/api/stream', async (req, res) => {
