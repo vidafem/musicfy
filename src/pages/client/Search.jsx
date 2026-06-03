@@ -8,6 +8,7 @@ import { fetchFromPiped, getHighResThumbnail } from '../../utils/pipedService';
 import { recommendationEngine } from '../../utils/recommendationEngine';
 import { BACKEND_URL } from '../../config';
 import { fetchWithTimeout } from '../../utils/fetchHelper';
+import Fuse from 'fuse.js';
 import './Search.css';
 
 // Caché en memoria para búsquedas instantáneas
@@ -50,6 +51,7 @@ export default function SearchPage() {
   const [playlistsAndAlbums, setPlaylistsAndAlbums] = useState([]);
   const [favoriteArtists, setFavoriteArtists] = useState([]);
   const [favoriteGenres, setFavoriteGenres] = useState([]);
+  const [allLocalSongs, setAllLocalSongs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const searchRequestRef = useRef({ id: 0, controller: null });
@@ -75,8 +77,16 @@ export default function SearchPage() {
     try {
       const { data: songsData } = await supabase
         .from('songs')
-        .select('artist, genre, cover_url')
-        .limit(250);
+        .select('*');
+
+      if (songsData) {
+        const formatted = songsData.map(song => ({
+          ...song,
+          source: song.source || 'local',
+          is_local: true
+        }));
+        setAllLocalSongs(formatted);
+      }
 
       const profile = recommendationEngine.getProfile();
       
@@ -222,28 +232,46 @@ export default function SearchPage() {
         setPlaylistsAndAlbums([]);
       }
 
-      // 1. Ejecutar búsqueda local en Supabase con un solo .or()
+      // 1. Ejecutar búsqueda local en memoria con Fuse.js
       const localPromise = (async () => {
-        let localRequest = supabase.from('songs').select('*');
-        if (activeFilter === 'Videos') {
-          localRequest = localRequest.eq('is_video', true);
-        }
         try {
-          const res = await Promise.race([
-            localRequest.or(`title.ilike.%${trimmed}%,artist.ilike.%${trimmed}%,genre.ilike.%${trimmed}%,album.ilike.%${trimmed}%`).limit(50),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de Supabase (5s)')), 5000))
-          ]);
-          let localSongs = (res.error ? [] : (res.data || [])).map(song => ({
-            ...song,
-            source: song.source || 'local',
-            is_local: true
-          }));
-          if (activeFilter === 'Música') {
+          let songsToSearch = allLocalSongs;
+          if (songsToSearch.length === 0) {
+            const { data } = await supabase.from('songs').select('*');
+            if (data) {
+              songsToSearch = data.map(song => ({
+                ...song,
+                source: song.source || 'local',
+                is_local: true
+              }));
+              setAllLocalSongs(songsToSearch);
+            }
+          }
+
+          if (songsToSearch.length === 0) return [];
+
+          const fuse = new Fuse(songsToSearch, {
+            keys: [
+              { name: 'title', weight: 0.5 },
+              { name: 'artist', weight: 0.3 },
+              { name: 'album', weight: 0.1 },
+              { name: 'genre', weight: 0.1 }
+            ],
+            threshold: 0.4,
+            ignoreLocation: true
+          });
+
+          const searchResults = fuse.search(trimmed).map(res => res.item);
+
+          let localSongs = searchResults;
+          if (activeFilter === 'Videos') {
+            localSongs = localSongs.filter(song => song.is_video);
+          } else if (activeFilter === 'Música') {
             localSongs = localSongs.filter(song => !song.is_video);
           }
-          return localSongs;
+          return localSongs.slice(0, 50);
         } catch (localErr) {
-          console.warn("Búsqueda local falló o excedió el tiempo límite:", localErr);
+          console.warn("Búsqueda local con Fuse.js falló:", localErr);
           return [];
         }
       })();

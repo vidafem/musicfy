@@ -435,6 +435,50 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+async function resolvePlaylistWithInvidiousParallel(cleanId) {
+  const instances = [
+    'https://inv.nadeko.net',
+    'https://invidious.projectsegfau.lt',
+    'https://invidious.privacydev.net',
+    'https://invidious.fdn.fr',
+    'https://inv.tux.pizza',
+    'https://invidious.protokoll-11.de',
+    'https://iv.ggtyler.dev',
+    'https://invidious.privacyredirect.com',
+    'https://invidious.lunar.icu',
+    'https://vid.puffyan.us',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.slipfox.xyz'
+  ];
+
+  const fetchFromInstance = async (baseUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/playlists/${cleanId}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!data.title || !data.videos || data.videos.length === 0) {
+        throw new Error('Playlist vacía o no válida');
+      }
+      return data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  try {
+    return await Promise.any(instances.map(url => fetchFromInstance(url)));
+  } catch (err) {
+    throw new Error('Todos los mirrors de Invidious fallaron');
+  }
+}
+
 app.get('/api/playlist/tracks', async (req, res) => {
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: 'Falta el parametro de ID de playlist (id)' });
@@ -443,7 +487,36 @@ app.get('/api/playlist/tracks', async (req, res) => {
   console.log(`[PlaylistTracks] Obteniendo canciones para playlist: ${cleanId}`);
 
   try {
-    // 1. Intentar con youtube-ext (Bypass directo sin dependencias externas del SO, funciona en Render)
+    // 1. Intentar resolver con Invidious en paralelo (Altamente confiable y rápido)
+    try {
+      console.log(`[PlaylistTracks] Intentando resolver con Invidious en paralelo para: ${cleanId}`);
+      const data = await resolvePlaylistWithInvidiousParallel(cleanId);
+      const tracks = (data.videos || []).map((video, idx) => ({
+        id: video.videoId,
+        title: video.title,
+        artist: video.author || 'Artista Desconocido',
+        cover_url: bestThumbnail(video.videoThumbnails) || `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
+        url: null,
+        source: 'youtube',
+        youtube_id: video.videoId,
+        is_external: true,
+        is_video: false,
+        duration: video.lengthSeconds || 0,
+        position: idx + 1
+      }));
+
+      return res.json({
+        title: data.title || 'Playlist de YouTube',
+        description: data.description || '',
+        trackCount: tracks.length,
+        cover_url: tracks[0]?.cover_url || '',
+        tracks
+      });
+    } catch (invidiousError) {
+      console.warn(`[PlaylistTracks] Invidious falló para ${cleanId}, intentando youtube-ext...`, invidiousError.message);
+    }
+
+    // 2. Intentar con youtube-ext (Bypass directo sin dependencias externas del SO, funciona en Render)
     const playlistUrl = `https://www.youtube.com/playlist?list=${cleanId}`;
     const data = await playlistInfo(playlistUrl);
     

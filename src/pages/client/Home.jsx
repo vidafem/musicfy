@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Pause, Heart, WifiOff, Download, Check, RefreshCw, MoreVertical } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
@@ -10,6 +11,7 @@ import { fetchWithTimeout } from '../../utils/fetchHelper';
 import './Home.css';
 
 export default function Home() {
+  const navigate = useNavigate();
   const queue = usePlayerStore(state => state.queue);
   const currentSong = usePlayerStore(state => state.currentSong);
   const isPlaying = usePlayerStore(state => state.isPlaying);
@@ -36,6 +38,7 @@ export default function Home() {
 
   const [dbSongs, setDbSongs] = useState([]);
   const [youtubeTasteSongs, setYoutubeTasteSongs] = useState([]);
+  const [favoriteArtists, setFavoriteArtists] = useState([]);
 
   // 1. Cargar todas las canciones locales de Supabase al iniciar
   useEffect(() => {
@@ -139,6 +142,105 @@ export default function Home() {
     // Esperamos un momento a que dbSongs esté listo para no hacer peticiones de más
     if (dbSongs.length > 0) {
       loadYoutubeTasteSongs();
+    }
+  }, [dbSongs, isOfflineMode]);
+
+  // 3. Cargar artistas favoritos ("Tus Cantantes") para el Home
+  useEffect(() => {
+    if (isOfflineMode) return;
+
+    const loadHomeArtists = async () => {
+      try {
+        const profile = recommendationEngine.getProfile();
+        const artistCovers = {};
+        const allUniqueArtists = new Set();
+        
+        if (dbSongs) {
+          dbSongs.forEach(s => {
+            if (s.artist) {
+              allUniqueArtists.add(s.artist);
+              if (!artistCovers[s.artist] && s.cover_url) {
+                artistCovers[s.artist] = s.cover_url;
+              }
+            }
+          });
+        }
+
+        const topArtists = [...new Set([...(profile.topArtists || []), ...allUniqueArtists])].slice(0, 8);
+
+        let avatarCache = {};
+        try {
+          const cached = localStorage.getItem('musicfy_artist_avatars_cache');
+          if (cached) avatarCache = JSON.parse(cached);
+        } catch (e) {}
+
+        const artistsWithCovers = [];
+        const artistsToFetch = [];
+
+        topArtists.forEach(artist => {
+          if (avatarCache[artist]) {
+            artistsWithCovers.push({
+              name: artist,
+              image: avatarCache[artist]
+            });
+          } else {
+            artistsWithCovers.push({
+              name: artist,
+              image: artistCovers[artist] || `https://images.unsplash.com/photo-1493225255756-d9584f8606e9?q=80&w=300&auto=format&fit=crop`
+            });
+            artistsToFetch.push(artist);
+          }
+        });
+
+        setFavoriteArtists([...artistsWithCovers]);
+
+        if (artistsToFetch.length > 0) {
+          Promise.allSettled(
+            artistsToFetch.map(async (artist) => {
+              const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(artist)}&type=artist`, {}, 15000);
+              if (res.ok) {
+                const data = await res.json();
+                const firstArtist = data.items?.[0];
+                if (firstArtist && firstArtist.thumbnail) {
+                  let url = firstArtist.thumbnail;
+                  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+                    url = url.replace(/=w\d+-h\d+/, '=w544-h544').replace(/=s\d+/, '=s512');
+                  } else if (url.includes('ytimg.com') || url.includes('youtube.com')) {
+                    if (url.includes('/default.jpg')) url = url.replace('/default.jpg', '/hqdefault.jpg');
+                    else if (url.includes('/mqdefault.jpg')) url = url.replace('/mqdefault.jpg', '/hqdefault.jpg');
+                  }
+                  return { artist, image: url };
+                }
+              }
+              return { artist, image: artistCovers[artist] || '/icon.png' };
+            })
+          ).then(results => {
+            let cacheChanged = false;
+            results.forEach(r => {
+              if (r.status === 'fulfilled' && r.value) {
+                const { artist, image } = r.value;
+                avatarCache[artist] = image;
+                cacheChanged = true;
+              }
+            });
+            if (cacheChanged) {
+              localStorage.setItem('musicfy_artist_avatars_cache', JSON.stringify(avatarCache));
+              
+              const updatedArtists = topArtists.map(artist => ({
+                name: artist,
+                image: avatarCache[artist] || artistCovers[artist] || '/icon.png'
+              }));
+              setFavoriteArtists(updatedArtists);
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("[Home] Error loading favorite artists:", err);
+      }
+    };
+
+    if (dbSongs.length > 0) {
+      loadHomeArtists();
     }
   }, [dbSongs, isOfflineMode]);
 
@@ -324,7 +426,7 @@ export default function Home() {
                     </div>
                     <div className="scroll-card-info">
                       <h4 className="scroll-card-title flex-title">
-                        {song.title}
+                        <span className="scroll-card-title-text">{song.title}</span>
                         {isDownloaded && <span className="green-dl-dot" title="Descargado offline">▼</span>}
                       </h4>
                       <p className="scroll-card-desc">{song.artist}</p>
@@ -336,45 +438,28 @@ export default function Home() {
           </section>
         )}
 
-        {/* Carrusel 3: Recomendado Para Ti */}
-        {recommendedTracks.length > 0 && (
+        {/* Sección: Tus Cantantes (Reemplaza Recomendados para hoy) */}
+        {favoriteArtists.length > 0 && !isOfflineMode && (
           <section className="home-section-spotify">
-            <h2 className="section-title-spotify flex-header-inline">
-              <span>Recomendados para hoy</span>
-            </h2>
-            <div className="horizontal-scroll scrollbar-hidden">
-              {recommendedTracks.map((song) => {
-                const isActive = currentSong?.id === song.id;
-                const isDownloaded = downloadedIds.includes(song.id);
-
-                return (
-                  <div key={song.id} className={`scroll-card ${isActive ? 'active' : ''}`}>
-                    <div className="scroll-card-cover-wrapper" onClick={() => handleSongClick(song)}>
-                      <img src={song.cover_url} alt="" className="scroll-card-cover" />
-                      <button className={`card-play-bubble ${isActive && isPlaying ? 'visible' : ''}`}>
-                        {isActive && isPlaying ? (
-                          <Pause size={18} fill="black" color="black" />
-                        ) : (
-                          <Play size={18} fill="black" color="black" style={{ marginLeft: '3px' }} />
-                        )}
-                      </button>
-                      <button 
-                        className="card-options-bubble"
-                        onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-                    </div>
-                    <div className="scroll-card-info">
-                      <h4 className="scroll-card-title flex-title">
-                        {song.title}
-                        {isDownloaded && <span className="green-dl-dot" title="Descargado offline">▼</span>}
-                      </h4>
-                      <p className="scroll-card-desc">{song.artist}</p>
-                    </div>
+            <h2 className="section-title-spotify">Tus Cantantes</h2>
+            <div className="explore-artists-grid">
+              {favoriteArtists.map(artist => (
+                <div 
+                  key={artist.name} 
+                  className="explore-artist-card"
+                  onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
+                >
+                  <div className="artist-avatar-wrapper">
+                    <img 
+                      src={artist.image} 
+                      alt={artist.name} 
+                      className="artist-avatar-img" 
+                      onError={(e) => { e.target.src = '/icon.png'; }}
+                    />
                   </div>
-                );
-              })}
+                  <span className="artist-avatar-name">{artist.name}</span>
+                </div>
+              ))}
             </div>
           </section>
         )}
