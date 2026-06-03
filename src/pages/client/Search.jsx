@@ -383,11 +383,19 @@ export default function SearchPage() {
   };
 
   const handlePlaySong = (song) => {
-    // Sincronizar la cola de reproducción con los resultados de la búsqueda actual
-    const songIndex = results.findIndex(r => r.id === song.id);
-    if (songIndex !== -1) {
-      usePlayerStore.getState().setQueue(results);
+    // Sincronizar la cola de reproducción con los resultados del mismo artista
+    let artistMatches = results.filter(r => 
+      r.artist && song.artist && 
+      (r.artist.toLowerCase().includes(song.artist.toLowerCase()) || 
+       song.artist.toLowerCase().includes(r.artist.toLowerCase()))
+    );
+    
+    // Asegurar que la canción seleccionada esté en la lista
+    if (!artistMatches.some(r => r.id === song.id)) {
+      artistMatches = [song, ...artistMatches];
     }
+
+    usePlayerStore.getState().setQueue(artistMatches);
     playSong(song);
     addToHistory(song, 'song');
   };

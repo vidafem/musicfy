@@ -12,12 +12,16 @@ export default function SongMenu() {
   const { playlists, addSongToPlaylist, toggleLike, likedSongs, createPlaylist } = useLibraryStore();
 
   const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
   const [toastMessage, setToastMessage] = useState('');
 
   // Reset view when menu opens/closes
   useEffect(() => {
     if (song) {
       setShowPlaylistSelector(false);
+      setIsCreatingPlaylist(false);
+      setNewPlaylistName('');
     }
   }, [song]);
 
@@ -47,19 +51,32 @@ export default function SongMenu() {
     setToastMessage('Agregado a la cola');
   };
 
-  const handleAddToPlaylist = (playlistId, playlistName) => {
-    closeMenu();
-    addSongToPlaylist(playlistId, song);
+  const handleAddToPlaylist = async (playlistId, playlistName) => {
+    setToastMessage(`Agregando a ${playlistName}...`);
+    try {
+      await addSongToPlaylist(playlistId, song);
+      setToastMessage(`Agregado con éxito a ${playlistName}`);
+      setTimeout(() => {
+        closeMenu();
+      }, 1000);
+    } catch (err) {
+      setToastMessage(`Error: ${err.message || 'No se pudo agregar'}`);
+    }
   };
 
-  const handleCreateNewPlaylist = async () => {
-    const name = prompt('Nombre de la nueva playlist:');
-    if (name && name.trim()) {
-      closeMenu();
-      const newPl = await createPlaylist(name.trim());
-      if (newPl) {
-        addSongToPlaylist(newPl.id, song);
-      }
+  const handleConfirmCreatePlaylist = async () => {
+    if (!newPlaylistName || !newPlaylistName.trim()) return;
+    const name = newPlaylistName.trim();
+    setToastMessage('Creando playlist...');
+    const newPl = await createPlaylist(name);
+    if (newPl) {
+      setToastMessage(`Playlist "${name}" creada`);
+      setIsCreatingPlaylist(false);
+      setNewPlaylistName('');
+      // Agregar la canción automáticamente
+      await handleAddToPlaylist(newPl.id, newPl.name);
+    } else {
+      setToastMessage('Error al crear playlist');
     }
   };
 
@@ -108,6 +125,34 @@ export default function SongMenu() {
                 <span>Agregar a una playlist...</span>
               </button>
             </>
+          ) : isCreatingPlaylist ? (
+            <div className="playlist-selector-view">
+              <div className="selector-back-row">
+                <button className="selector-back-btn" onClick={() => { setIsCreatingPlaylist(false); setNewPlaylistName(''); }}>
+                  ← Volver
+                </button>
+                <h4>Nueva Playlist</h4>
+              </div>
+              <div className="new-playlist-input-container">
+                <input 
+                  type="text" 
+                  placeholder="Nombre de la nueva playlist..." 
+                  value={newPlaylistName}
+                  onChange={(e) => setNewPlaylistName(e.target.value)}
+                  className="new-playlist-input"
+                  maxLength={50}
+                  autoFocus
+                />
+                <div className="new-playlist-actions">
+                  <button className="new-playlist-btn cancel" onClick={() => { setIsCreatingPlaylist(false); setNewPlaylistName(''); }}>
+                    Cancelar
+                  </button>
+                  <button className="new-playlist-btn create" onClick={handleConfirmCreatePlaylist} disabled={!newPlaylistName.trim()}>
+                    Crear
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="playlist-selector-view">
               <div className="selector-back-row">
@@ -117,7 +162,7 @@ export default function SongMenu() {
                 <h4>Selecciona una Playlist</h4>
               </div>
               <div className="playlists-scroll-list">
-                <button className="menu-playlist-item create-new-playlist-btn" onClick={handleCreateNewPlaylist}>
+                <button className="menu-playlist-item create-new-playlist-btn" onClick={() => setIsCreatingPlaylist(true)}>
                   <div className="playlist-icon-square create-new-icon">
                     <Plus size={16} />
                   </div>

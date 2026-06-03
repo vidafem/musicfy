@@ -292,3 +292,71 @@
   background: rgba(var(--accent-color-rgb, 29, 185, 84), 0.08) !important;
   border-color: var(--accent-color, #1db954) !important;
 }
+
+/* New Playlist Input styles */
+.new-playlist-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 4px;
+}
+
+.new-playlist-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: white;
+  padding: 14px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.new-playlist-input:focus {
+  border-color: var(--accent-color, #1db954);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.15);
+}
+
+.new-playlist-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.new-playlist-btn {
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.new-playlist-btn.cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+}
+
+.new-playlist-btn.cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.new-playlist-btn.create {
+  background: var(--accent-color, #1db954);
+  color: black;
+}
+
+.new-playlist-btn.create:hover {
+  background: #1ed760;
+  transform: scale(1.02);
+}
+
+.new-playlist-btn.create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

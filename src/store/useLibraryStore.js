@@ -87,7 +87,9 @@ export const useLibraryStore = create((set, get) => ({
       if (error) throw error;
 
       const newPlaylist = { ...data, title: data.name, songs: [] };
-      set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
+      const updatedPlaylists = [newPlaylist, ...get().playlists];
+      set({ playlists: updatedPlaylists });
+      localStorage.setItem('musicfy_playlists_cache', JSON.stringify(updatedPlaylists));
       return newPlaylist;
     } catch (error) {
       console.error('Error creando playlist:', error);
@@ -151,27 +153,7 @@ export const useLibraryStore = create((set, get) => ({
       if (existing) return existing.id;
     }
 
-    // Descargar letras de LRCLib si es de YouTube
-    let lyrics = song.lyrics || null;
-    if (!lyrics && song.title) {
-      try {
-        const cleanArtist = song.artist && song.artist !== 'Artista Desconocido' ? song.artist : '';
-        let lrcUrl = cleanArtist 
-          ? `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(song.title)}`
-          : `https://lrclib.net/api/search?q=${encodeURIComponent(song.title)}`;
-        const res = await fetch(lrcUrl);
-        if (res.ok) {
-          const lrcData = await res.json();
-          if (lrcData && lrcData.length > 0) {
-            lyrics = lrcData[0].syncedLyrics || lrcData[0].plainLyrics || null;
-          }
-        }
-      } catch (e) {
-        console.warn("[ensureSongInDb] Error al pre-cargar letras de LRCLib:", e);
-      }
-    }
-
-    // Insert new song
+    // Insert new song immediately (default to '[Streaming]' lyrics to prevent blocking the UI)
     const { data, error } = await supabase
         .from('songs')
         .insert([{
@@ -181,7 +163,7 @@ export const useLibraryStore = create((set, get) => ({
             cover_url: song.cover_url || '',
             background_url: song.background_url || song.cover_url || '',
             duration: song.duration || 0,
-            lyrics: lyrics || '[Streaming]',
+            lyrics: song.lyrics || '[Streaming]',
             source: isYouTube ? 'youtube' : (song.source || 'local'),
             youtube_id: isYouTube ? yid : null,
             is_video: song.is_video || false,
@@ -194,13 +176,44 @@ export const useLibraryStore = create((set, get) => ({
         console.error('Error ensuring song in DB:', error);
         return null;
     }
-    return data.id;
+
+    const songId = data.id;
+
+    // Fetch and save lyrics asynchronously in the background if they weren't provided
+    if (!song.lyrics && song.title) {
+      (async () => {
+        try {
+          const cleanArtist = song.artist && song.artist !== 'Artista Desconocido' ? song.artist : '';
+          let lrcUrl = cleanArtist 
+            ? `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(song.title)}`
+            : `https://lrclib.net/api/search?q=${encodeURIComponent(song.title)}`;
+          const res = await fetch(lrcUrl);
+          if (res.ok) {
+            const lrcData = await res.json();
+            if (lrcData && lrcData.length > 0) {
+              const fetchedLyrics = lrcData[0].syncedLyrics || lrcData[0].plainLyrics || null;
+              if (fetchedLyrics) {
+                await supabase
+                  .from('songs')
+                  .update({ lyrics: fetchedLyrics })
+                  .eq('id', songId);
+                console.log(`[ensureSongInDb] Letras descargadas y guardadas en segundo plano para: ${song.title}`);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[ensureSongInDb] Error al descargar letras en segundo plano:", e);
+        }
+      })();
+    }
+
+    return songId;
   },
 
   addSongToPlaylist: async (playlistId, song) => {
     try {
       const songId = await get().ensureSongInDb(song);
-      if (!songId) return;
+      if (!songId) throw new Error('No se pudo verificar o guardar la canción en la base de datos');
 
       // Get current max position
       const playlist = get().playlists.find(p => p.id === playlistId);
@@ -216,21 +229,20 @@ export const useLibraryStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Update local state
-      set((state) => ({
-        playlists: state.playlists.map(p => {
-          if (p.id === playlistId) {
-            // We need the full song object for the UI
-            // If the song passed already has metadata, use it. 
-            // If it was just an ID, we'd need to fetch it, but here we usually have the object.
-            const fullSong = { ...song, id: songId }; 
-            return { ...p, songs: [...p.songs, fullSong] };
-          }
-          return p;
-        })
-      }));
+      // Update local state and cache
+      const updatedPlaylists = get().playlists.map(p => {
+        if (p.id === playlistId) {
+          const fullSong = { ...song, id: songId }; 
+          return { ...p, songs: [...p.songs, fullSong] };
+        }
+        return p;
+      });
+      set({ playlists: updatedPlaylists });
+      localStorage.setItem('musicfy_playlists_cache', JSON.stringify(updatedPlaylists));
+      return true;
     } catch (error) {
       console.error('Error adding song to playlist:', error);
+      throw error;
     }
   },
 
@@ -244,15 +256,15 @@ export const useLibraryStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Update local state
-      set((state) => ({
-        playlists: state.playlists.map(p => {
-          if (p.id === playlistId) {
-            return { ...p, songs: p.songs.filter(s => s.id !== songId) };
-          }
-          return p;
-        })
-      }));
+      // Update local state and cache
+      const updatedPlaylists = get().playlists.map(p => {
+        if (p.id === playlistId) {
+          return { ...p, songs: p.songs.filter(s => s.id !== songId) };
+        }
+        return p;
+      });
+      set({ playlists: updatedPlaylists });
+      localStorage.setItem('musicfy_playlists_cache', JSON.stringify(updatedPlaylists));
 
       // Garbage Collector Check: si es de youtube y ya no está en ninguna playlist ni likes, borrar de la tabla songs
       const { data: songData } = await supabase

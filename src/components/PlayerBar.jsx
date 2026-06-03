@@ -194,7 +194,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
           rel: 0,
           showinfo: 0,
           iv_load_policy: 3,
-          mute: useYtIframeAudio ? 0 : 1, // Desmuteado si usamos audio del iframe
+          mute: (useYtIframeAudio && isMasterDevice) ? 0 : 1, // Desmuteado si usamos audio del iframe en el maestro
           enablejsapi: 1,
           origin: window.location.origin
         },
@@ -205,7 +205,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
               return;
             }
             setYtPlayer(event.target);
-            if (useYtIframeAudio) {
+            if (useYtIframeAudio && isMasterDevice) {
               event.target.unMute();
               event.target.setVolume(volume * 100);
             } else {
@@ -271,7 +271,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   useEffect(() => {
     if (ytPlayer && ytPlayer.setVolume) {
       try {
-        if (useYtIframeAudio) {
+        if (useYtIframeAudio && isMasterDevice) {
           ytPlayer.unMute();
           ytPlayer.setVolume(volume * 100);
         } else {
@@ -279,7 +279,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
         }
       } catch (e) {}
     }
-  }, [ytPlayer, useYtIframeAudio, volume]);
+  }, [ytPlayer, useYtIframeAudio, volume, isMasterDevice]);
 
   // Sincronizar progreso de reproducción para el reproductor de YouTube (cuando usamos audio del iframe)
   useEffect(() => {
@@ -436,6 +436,15 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
   const handleTimeUpdate = (e) => {
     const audio = e.target;
+    if (!currentSong) return;
+
+    // Si el src del elemento de audio no coincide con el de la canción actual, ignorar el evento de tiempo.
+    // Esto previene que eventos de la canción anterior sobrescriban el currentTime inicial (0).
+    const normalize = (url) => { try { return new URL(url).pathname + new URL(url).search; } catch { return url; } };
+    if (normalize(audio.src) !== normalize(currentSong.url)) {
+      return;
+    }
+
     const mainAudio = activeChannel === 'A' ? audioARef.current : audioBRef.current;
     const secondaryAudio = activeChannel === 'A' ? audioBRef.current : audioARef.current;
     if (isMasterDevice) {
@@ -497,9 +506,9 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   // --- GAPLESS PRE-BUFFERING (Carga anticipada del buffer en canal inactivo) ---
   useEffect(() => {
     if (!currentSong || queue.length === 0 || !isMasterDevice || !isPlaying) return;
-    
-    const timeLeft = duration - currentTime;
-    if (duration > 0 && timeLeft < 15 && timeLeft > 5) {
+
+    // Disparar la pre-carga después de un retraso de 3 segundos para evitar congestionar la red al inicio
+    const timer = setTimeout(() => {
       const currentIndex = queue.findIndex(s => s.id === currentSong.id);
       if (currentIndex !== -1 && currentIndex < queue.length - 1) {
         const nextSong = queue[currentIndex + 1];
@@ -517,8 +526,10 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
           });
         }
       }
-    }
-  }, [currentTime, duration, queue, currentSong?.id, activeChannel, isMasterDevice, isPlaying]);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [queue, currentSong?.id, activeChannel, isMasterDevice, isPlaying]);
 
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
