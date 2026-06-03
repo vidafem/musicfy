@@ -1,4 +1,4 @@
-const CACHE_NAME = 'musicfy-v1';
+const CACHE_NAME = 'musicfy-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -26,19 +26,46 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Estrategia: Network First, falling back to Cache
+// Estrategia: Network First, falling back to Cache (solo para assets estáticos del mismo origen)
 self.addEventListener('fetch', (event) => {
-  // Ignorar peticiones a Supabase, APIs externas y Cloudflare R2
+  const url = new URL(event.request.url);
+
+  // 1. Solo interceptar peticiones del mismo origen (no APIs externas)
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // 2. NUNCA interceptar rutas de API del backend
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/api')) {
+    return;
+  }
+
+  // 3. Ignorar esquemas que no sean http/https
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // 4. Ignorar peticiones a servicios conocidos (por si acaso)
   if (
-    event.request.url.includes('supabase') || 
-    event.request.url.includes('piped') || 
-    event.request.url.includes('r2')
+    event.request.url.includes('supabase') ||
+    event.request.url.includes('piped') ||
+    event.request.url.includes('invidious') ||
+    event.request.url.includes('inv.') ||
+    event.request.url.includes('cobalt') ||
+    event.request.url.includes('r2') ||
+    event.request.url.includes('googlevideo') ||
+    event.request.url.includes('workers.dev') ||
+    event.request.url.includes('youtube')
   ) {
     return;
   }
 
-  // Ignorar esquemas que no sean http/https (ej: extensiones de chrome)
-  if (!event.request.url.startsWith('http')) {
+  // 5. Solo cachear assets estáticos (JS, CSS, imágenes, fuentes, HTML)
+  const isStaticAsset = url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|eot|json|html)$/i)
+    || url.pathname === '/'
+    || event.request.mode === 'navigate';
+
+  if (!isStaticAsset) {
     return;
   }
 
@@ -56,14 +83,13 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
 
-        // Si es una petición de navegación (HTML/SPA) y falló la red, servir el index.html
+        // Si es una petición de navegación (SPA), servir index.html del caché
         if (event.request.mode === 'navigate') {
           const indexCache = await caches.match('/index.html');
           if (indexCache) return indexCache;
         }
 
-        // Fallback final: retornar una respuesta vacía o de error en vez de undefined para no romper el navegador
-        return new Response('Error de conexión local', {
+        return new Response('Offline', {
           status: 503,
           statusText: 'Service Unavailable',
           headers: { 'Content-Type': 'text/plain' }

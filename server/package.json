@@ -1,9 +1,12 @@
 {
   "name": "musicfy-backend",
   "version": "1.0.0",
-  "description": "Backend de retransmisión y búsqueda de YouTube Music para Musicfy",
+  "description": "Backend de búsqueda y streaming de YouTube Music para Musicfy",
   "main": "index.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node index.js"
   },
@@ -11,9 +14,8 @@
     "@distube/ytdl-core": "^4.16.12",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.21.0",
     "youtube-ext": "^1.1.25",
-    "youtube-music-api": "^1.0.6",
-    "ytdl-core": "^4.11.5"
+    "youtube-music-api": "^1.0.6"
   }
 }

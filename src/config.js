@@ -16,7 +16,10 @@ const isLocalhost = typeof window !== 'undefined' && (
   window.location.hostname.startsWith('172.')
 );
 
-// URL del backend: prioridad a la env var, luego detección dinámica en red local, con fallback a la API de Render
+// URL del backend:
+// 1. Prioridad: variable de entorno VITE_BACKEND_URL (apunta a Render en producción)
+// 2. Si estamos en red local, usar el backend local en el mismo host
+// 3. Fallback a /api (Vercel serverless, limitado)
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
   (isLocalhost
     ? `${window.location.protocol}//${window.location.hostname}:5000/api`

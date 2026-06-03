@@ -164,31 +164,6 @@ export const YouTubeProvider = {
       console.warn('[YouTubeProvider] Piped proxy falló:', e.message)
     }
 
-    // Intento 3: Invidious directo (algunas instancias sí soportan CORS)
-    const invidiousInstances = [
-      'https://inv.nadeko.net',
-      'https://invidious.fdn.fr',
-      'https://inv.tux.pizza',
-      'https://iv.ggtyler.dev'
-    ]
-
-    for (const instance of invidiousInstances) {
-      try {
-        const res = await fetchWithTimeout(`${instance}/api/v1/videos/${youtubeId}`, {
-          headers: { Accept: 'application/json' }
-        }, 8000)
-        if (!res.ok) continue
-        const data = await res.json()
-        const audio = (data.adaptiveFormats || [])
-          .filter(f => f.type?.startsWith('audio/') && f.url)
-          .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0]
-        if (audio?.url) {
-          console.log(`[YouTubeProvider] ✅ Stream resuelto via Invidious (${instance})`)
-          return audio.url
-        }
-      } catch { /* intentar siguiente */ }
-    }
-
     console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
     throw new Error('No se pudo obtener la URL del stream desde ninguna fuente')
   },
