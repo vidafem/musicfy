@@ -51,8 +51,9 @@ export const usePlayerStore = create((set, get) => ({
   setShowDeviceSelector: (val) => set({ showDeviceSelector: val }),
 
   activeSongMenu: null,
-  setActiveSongMenu: (song) => set({ activeSongMenu: song }),
-  closeSongMenu: () => set({ activeSongMenu: null }),
+  activePlaylistContext: null,
+  setActiveSongMenu: (song, playlistContext = null) => set({ activeSongMenu: song, activePlaylistContext: playlistContext }),
+  closeSongMenu: () => set({ activeSongMenu: null, activePlaylistContext: null }),
 
   // --- LÓGICA DE SINCRONIZACIÓN (CONNECT PRO) ---
 
@@ -572,13 +573,11 @@ export const usePlayerStore = create((set, get) => ({
     const updatedAt = Date.now();
     // Usamos el playableUrl (que puede ser un blob local o stream de youtube)
     const newSongState = { ...song, url: playableUrl };
-    const isVideo = Boolean(song.is_video || song.video_url);
     set({ 
       currentSong: newSongState, 
       isPlaying: true, 
       currentTime: 0, 
-      playbackUpdatedAt: updatedAt,
-      isFullScreen: isVideo ? true : get().isFullScreen
+      playbackUpdatedAt: updatedAt
     });
 
     // Guardar en IndexedDB

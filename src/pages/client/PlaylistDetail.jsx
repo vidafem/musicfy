@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Heart, Play, Shuffle, Search, ArrowLeft, Plus, MoreHorizontal, Clock, Music, ArrowDownCircle } from 'lucide-react';
+import { Heart, Play, Shuffle, Search, ArrowLeft, Plus, MoreHorizontal, Clock, Music, ArrowDownCircle, Trash2 } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useOfflineStore } from '../../store/useOfflineStore';
@@ -255,9 +255,22 @@ export default function PlaylistDetail() {
               <ArrowDownCircle size={24} />
             )}
           </button>
-          <button className="action-icon-btn">
-            <MoreHorizontal size={24} />
-          </button>
+          {!playlist.is_liked_playlist && !playlist.is_external && (
+            <button 
+              className="action-icon-btn delete-playlist-btn" 
+              onClick={async () => {
+                if (window.confirm('¿Deseas eliminar esta playlist por completo?')) {
+                  const deletePlaylist = useLibraryStore.getState().deletePlaylist;
+                  await deletePlaylist(playlist.id);
+                  navigate('/library');
+                }
+              }}
+              title="Eliminar playlist"
+              style={{ color: '#ff4444' }}
+            >
+              <Trash2 size={24} />
+            </button>
+          )}
         </div>
 
         <div className="actions-right">
@@ -358,7 +371,7 @@ export default function PlaylistDetail() {
                     <span className="duration-text">
                       {song.duration ? `${Math.floor(song.duration / 60)}:${String(song.duration % 60).padStart(2, '0')}` : '3:45'}
                     </span>
-                    <button className="song-more-btn" onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song); }}>
+                    <button className="song-more-btn" onClick={(e) => { e.stopPropagation(); setActiveSongMenu(song, playlist); }}>
                       <MoreHorizontal size={16} />
                     </button>
                   </div>

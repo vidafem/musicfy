@@ -365,6 +365,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     const normalize = (url) => { try { return new URL(url).pathname + new URL(url).search; } catch { return url; } };
 
     if (normalize(activeAudio.src) !== normalize(currentSong.url)) {
+      activeAudio.currentTime = 0;
       activeAudio.src = currentSong.url;
       if (isPlaying && activeDeviceId === deviceId) activeAudio.play().catch(() => {});
     }
@@ -436,6 +437,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
 
   const handleTimeUpdate = (e) => {
     const audio = e.target;
+    if (audio.readyState < 2) return;
     if (!currentSong) return;
 
     // Si el src del elemento de audio no coincide con el de la canción actual, ignorar el evento de tiempo.

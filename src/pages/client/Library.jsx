@@ -178,48 +178,50 @@ export default function Library() {
       )}
 
       {activeTab === 'playlists' && (
-        <>
-          {filteredPlaylists.length === 0 ? (
-            <div className="library-empty-state">
-              <p>No tienes playlists aún. Crea una nueva y agrégale canciones.</p>
-            </div>
-          ) : (
-            <div className="library-playlist-list">
-              {filteredPlaylists.map((playlist) => (
-                <div key={playlist.id} className="playlist-list-item">
-                  <Link to={`/library/playlist/${playlist.id}`} className="playlist-list-link">
-                    <div className="playlist-list-covers">
-                      {playlist.covers.map((cover, index) => (
-                        <div key={index} className={`cover-item cover-item-${index + 1}`}>
-                          {cover ? <img src={cover} alt={`${playlist.title} cover ${index + 1}`} /> : <div className="cover-placeholder" />}
-                        </div>
-                      ))}
+        <div className="library-playlist-list">
+          {filteredPlaylists.map((playlist) => (
+            <div key={playlist.id} className="playlist-list-item">
+              <Link to={`/library/playlist/${playlist.id}`} className="playlist-list-link">
+                <div className="playlist-list-covers">
+                  {playlist.covers.map((cover, index) => (
+                    <div key={index} className={`cover-item cover-item-${index + 1}`}>
+                      {cover ? <img src={cover} alt={`${playlist.title} cover ${index + 1}`} /> : <div className="cover-placeholder" />}
                     </div>
-                    <div className="playlist-list-info">
-                      <span className="playlist-list-kind">Playlist</span>
-                      <strong>{playlist.title}</strong>
-                      <span>{playlist.songs.length} canciones</span>
-                    </div>
-                  </Link>
-                  <button
-                    type="button"
-                    className="playlist-list-remove"
-                    onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(playlist.id); }}
-                    title="Eliminar playlist"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  ))}
                 </div>
-              ))}
+                <div className="playlist-list-info">
+                  <span className="playlist-list-kind">Playlist</span>
+                  <strong>{playlist.title}</strong>
+                  <span>{playlist.songs.length} canciones</span>
+                </div>
+              </Link>
+              <button
+                type="button"
+                className="playlist-list-remove"
+                onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(playlist.id); }}
+                title="Eliminar playlist"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
-          )}
-        </>
+          ))}
+
+          {/* Tarjeta para crear nueva playlist */}
+          <div className="playlist-list-item create-playlist-card" onClick={() => setShowCreateModal(true)} style={{ cursor: 'pointer' }}>
+            <div className="playlist-list-link">
+              <div className="playlist-list-covers" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px dashed rgba(255, 255, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Plus size={24} color="var(--accent-color, #1db954)" />
+              </div>
+              <div className="playlist-list-info">
+                <span className="playlist-list-kind">Biblioteca</span>
+                <strong>Crear nueva playlist</strong>
+                <span>Comenzar una lista vacía</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Botón flotante para crear playlist */}
-      <button className="library-fab" onClick={() => setShowCreateModal(true)} title="Crear nueva playlist">
-        <Plus size={20} />
-      </button>
     </div>
   );
 }

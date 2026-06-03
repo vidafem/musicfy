@@ -11,6 +11,7 @@ export const useLibraryStore = create((set, get) => ({
   likedSongs: [], // Array of song UUIDs
   likedYtSongs: [], // Array of YouTube videoIds
   likedUrls: [], // Array of local song URLs
+  dbSongs: [], // Cache de todas las canciones de Supabase
   isLoading: false,
 
   isSongLiked: (song) => {
@@ -66,6 +67,26 @@ export const useLibraryStore = create((set, get) => ({
     }
   },
 
+  fetchDbSongs: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const formatted = data.map(s => ({
+          ...s,
+          source: s.source || 'local',
+          is_local: s.source !== 'youtube'
+        }));
+        set({ dbSongs: formatted });
+      }
+    } catch (err) {
+      console.warn('[LibraryStore] Error fetching db songs:', err);
+    }
+  },
+
   createPlaylist: async (name, description = '') => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -100,6 +121,15 @@ export const useLibraryStore = create((set, get) => ({
 
   deletePlaylist: async (id) => {
     try {
+      // 1. Eliminar relaciones en playlist_songs primero (evita restricción de clave foránea)
+      const { error: relError } = await supabase
+        .from('playlist_songs')
+        .delete()
+        .eq('playlist_id', id);
+
+      if (relError) throw relError;
+
+      // 2. Eliminar la playlist
       const { error } = await supabase
         .from('playlists')
         .delete()
@@ -107,11 +137,13 @@ export const useLibraryStore = create((set, get) => ({
 
       if (error) throw error;
 
-      set((state) => ({
-        playlists: state.playlists.filter(pl => pl.id !== id)
-      }));
+      // 3. Actualizar estado y caché
+      const updatedPlaylists = get().playlists.filter(pl => pl.id !== id);
+      set({ playlists: updatedPlaylists });
+      localStorage.setItem('musicfy_playlists_cache', JSON.stringify(updatedPlaylists));
     } catch (error) {
       console.error('Error deleting playlist:', error);
+      alert(`Error al eliminar playlist: ${error.message}`);
     }
   },
 
@@ -169,7 +201,7 @@ export const useLibraryStore = create((set, get) => ({
             is_video: song.is_video || false,
             video_url: song.video_url || (isYouTube ? `https://www.youtube.com/watch?v=${yid}` : null)
         }])
-        .select('id')
+        .select('*')
         .single();
 
     if (error) {
@@ -178,6 +210,16 @@ export const useLibraryStore = create((set, get) => ({
     }
 
     const songId = data.id;
+    const newSongObj = {
+      ...data,
+      source: data.source || 'youtube',
+      is_local: data.source !== 'youtube'
+    };
+
+    // Agregar de inmediato al caché en memoria
+    set(state => ({
+      dbSongs: [newSongObj, ...state.dbSongs]
+    }));
 
     // Fetch and save lyrics asynchronously in the background if they weren't provided
     if (!song.lyrics && song.title) {

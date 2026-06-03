@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Play, ListMusic, Plus, FolderPlus, X, Heart } from 'lucide-react';
+import { Play, ListMusic, Plus, FolderPlus, X, Heart, Trash2 } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useLibraryStore } from '../store/useLibraryStore';
 import './SongMenu.css';
 
 export default function SongMenu() {
   const song = usePlayerStore(state => state.activeSongMenu);
+  const activePlaylistContext = usePlayerStore(state => state.activePlaylistContext);
   const closeMenu = usePlayerStore(state => state.closeSongMenu);
   
   const { playSong, queue, setQueue } = usePlayerStore();
-  const { playlists, addSongToPlaylist, toggleLike, likedSongs, createPlaylist } = useLibraryStore();
+  const { playlists, addSongToPlaylist, toggleLike, likedSongs, createPlaylist, removeSongFromPlaylist } = useLibraryStore();
 
   const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
@@ -85,6 +86,20 @@ export default function SongMenu() {
     setToastMessage(isLiked ? 'Eliminado de Favoritos' : 'Agregado a Favoritos');
   };
 
+  const handleRemoveFromPlaylist = async () => {
+    if (!activePlaylistContext || !song) return;
+    setToastMessage('Eliminando de la playlist...');
+    try {
+      await removeSongFromPlaylist(activePlaylistContext.id, song.id);
+      setToastMessage('Eliminado con éxito');
+      setTimeout(() => {
+        closeMenu();
+      }, 1000);
+    } catch (err) {
+      setToastMessage(`Error: ${err.message || 'No se pudo eliminar'}`);
+    }
+  };
+
   return (
     <div className="song-menu-overlay" onClick={closeMenu}>
       <div className="song-menu-drawer" onClick={(e) => e.stopPropagation()}>
@@ -124,6 +139,13 @@ export default function SongMenu() {
                 <Plus size={18} />
                 <span>Agregar a una playlist...</span>
               </button>
+
+              {activePlaylistContext && activePlaylistContext.id !== 'liked' && !activePlaylistContext.is_liked_playlist && !activePlaylistContext.is_external && (
+                <button className="menu-option-item remove-item" onClick={handleRemoveFromPlaylist} style={{ color: '#ff4444' }}>
+                  <Trash2 size={18} />
+                  <span>Eliminar de esta playlist</span>
+                </button>
+              )}
             </>
           ) : isCreatingPlaylist ? (
             <div className="playlist-selector-view">

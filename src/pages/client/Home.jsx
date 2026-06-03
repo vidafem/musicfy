@@ -23,6 +23,8 @@ export default function Home() {
   const likedSongs = useLibraryStore(state => state.likedSongs);
   const toggleLike = useLibraryStore(state => state.toggleLike);
   const fetchPlaylists = useLibraryStore(state => state.fetchPlaylists);
+  const dbSongs = useLibraryStore(state => state.dbSongs);
+  const fetchDbSongs = useLibraryStore(state => state.fetchDbSongs);
 
   const isOfflineMode = useOfflineStore(state => state.isOfflineMode);
   const isNetworkOnline = useOfflineStore(state => state.isNetworkOnline);
@@ -31,41 +33,16 @@ export default function Home() {
   const downloadSong = useOfflineStore(state => state.downloadSong);
   const removeDownload = useOfflineStore(state => state.removeDownload);
 
-  // Inicializar playlists si no hay
+  // Inicializar playlists y canciones de base de datos si no hay
   useEffect(() => {
     fetchPlaylists();
-  }, [fetchPlaylists]);
+    if (!isOfflineMode) {
+      fetchDbSongs();
+    }
+  }, [fetchPlaylists, fetchDbSongs, isOfflineMode]);
 
-  const [dbSongs, setDbSongs] = useState([]);
   const [youtubeTasteSongs, setYoutubeTasteSongs] = useState([]);
   const [favoriteArtists, setFavoriteArtists] = useState([]);
-
-  // 1. Cargar todas las canciones locales de Supabase al iniciar
-  useEffect(() => {
-    const loadAllDbSongs = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('songs')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (!error && data) {
-          const formatted = data.map(s => ({
-            ...s,
-            source: s.source || 'local',
-            is_local: s.source !== 'youtube'
-          }));
-          setDbSongs(formatted);
-        }
-      } catch (err) {
-        console.warn("[Home] Error cargando canciones de base de datos:", err);
-      }
-    };
-
-    if (!isOfflineMode) {
-      loadAllDbSongs();
-    }
-  }, [isOfflineMode]);
 
   // 2. Analizar perfil de gustos y cargar de fondo canciones de YouTube de artistas favoritos que falten en local
   useEffect(() => {
@@ -317,7 +294,7 @@ export default function Home() {
       <div className="home-content-scroll scrollbar-hidden">
         {/* Encabezado con Saludo */}
         <header className="home-header-spotify">
-          <h1 className="greeting-title">{greeting}</h1>
+          <h1 className="greeting-title">Bienvenido</h1>
         </header>
 
         {/* Rejilla Superior de 6 Accesos Rápidos */}
@@ -361,6 +338,32 @@ export default function Home() {
             })}
           </div>
         </section>
+
+        {/* Sección: Tus Cantantes (Reemplaza Recomendados para hoy) */}
+        {favoriteArtists.length > 0 && !isOfflineMode && (
+          <section className="home-section-spotify">
+            <h2 className="section-title-spotify">Tus Cantantes</h2>
+            <div className="explore-artists-grid">
+              {favoriteArtists.map(artist => (
+                <div 
+                  key={artist.name} 
+                  className="explore-artist-card"
+                  onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
+                >
+                  <div className="artist-avatar-wrapper">
+                    <img 
+                      src={artist.image} 
+                      alt={artist.name} 
+                      className="artist-avatar-img" 
+                      onError={(e) => { e.target.src = '/icon.png'; }}
+                    />
+                  </div>
+                  <span className="artist-avatar-name">{artist.name}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Carrusel 1: Mixes Recomendados */}
         {mixes.length > 0 && (
@@ -438,31 +441,7 @@ export default function Home() {
           </section>
         )}
 
-        {/* Sección: Tus Cantantes (Reemplaza Recomendados para hoy) */}
-        {favoriteArtists.length > 0 && !isOfflineMode && (
-          <section className="home-section-spotify">
-            <h2 className="section-title-spotify">Tus Cantantes</h2>
-            <div className="explore-artists-grid">
-              {favoriteArtists.map(artist => (
-                <div 
-                  key={artist.name} 
-                  className="explore-artist-card"
-                  onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
-                >
-                  <div className="artist-avatar-wrapper">
-                    <img 
-                      src={artist.image} 
-                      alt={artist.name} 
-                      className="artist-avatar-img" 
-                      onError={(e) => { e.target.src = '/icon.png'; }}
-                    />
-                  </div>
-                  <span className="artist-avatar-name">{artist.name}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+
 
         {/* Caso en que no haya canciones en la base de datos */}
         {allSongs.length === 0 && (

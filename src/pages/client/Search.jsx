@@ -51,7 +51,6 @@ export default function SearchPage() {
   const [playlistsAndAlbums, setPlaylistsAndAlbums] = useState([]);
   const [favoriteArtists, setFavoriteArtists] = useState([]);
   const [favoriteGenres, setFavoriteGenres] = useState([]);
-  const [allLocalSongs, setAllLocalSongs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const searchRequestRef = useRef({ id: 0, controller: null });
@@ -67,7 +66,7 @@ export default function SearchPage() {
   });
 
   const { currentSong, isPlaying, playSong, togglePlay, setActiveSongMenu } = usePlayerStore();
-  const { likedSongs, toggleLike, isSongLiked } = useLibraryStore();
+  const { likedSongs, toggleLike, isSongLiked, dbSongs, fetchDbSongs } = useLibraryStore();
 
   useEffect(() => {
     loadExploreData();
@@ -75,17 +74,10 @@ export default function SearchPage() {
 
   const loadExploreData = async () => {
     try {
-      const { data: songsData } = await supabase
-        .from('songs')
-        .select('*');
-
-      if (songsData) {
-        const formatted = songsData.map(song => ({
-          ...song,
-          source: song.source || 'local',
-          is_local: true
-        }));
-        setAllLocalSongs(formatted);
+      let songs = dbSongs;
+      if (songs.length === 0) {
+        await fetchDbSongs();
+        songs = useLibraryStore.getState().dbSongs;
       }
 
       const profile = recommendationEngine.getProfile();
@@ -94,8 +86,8 @@ export default function SearchPage() {
       const allUniqueArtists = new Set();
       const allUniqueGenres = new Set();
       
-      if (songsData) {
-        songsData.forEach(s => {
+      if (songs) {
+        songs.forEach(s => {
           if (s.artist) {
             allUniqueArtists.add(s.artist);
             if (!artistCovers[s.artist] && s.cover_url) {
@@ -235,17 +227,10 @@ export default function SearchPage() {
       // 1. Ejecutar búsqueda local en memoria con Fuse.js
       const localPromise = (async () => {
         try {
-          let songsToSearch = allLocalSongs;
+          let songsToSearch = dbSongs;
           if (songsToSearch.length === 0) {
-            const { data } = await supabase.from('songs').select('*');
-            if (data) {
-              songsToSearch = data.map(song => ({
-                ...song,
-                source: song.source || 'local',
-                is_local: true
-              }));
-              setAllLocalSongs(songsToSearch);
-            }
+            await fetchDbSongs();
+            songsToSearch = useLibraryStore.getState().dbSongs;
           }
 
           if (songsToSearch.length === 0) return [];
