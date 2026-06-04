@@ -558,11 +558,9 @@ export const usePlayerStore = create((set, get) => ({
       }
     }
 
-    if (!activeDeviceId || !isPlaying) {
-      if (activeDeviceId !== deviceId) {
-        console.log("[Connect] ⚡ Sistema libre detectado. Tomando el control...");
-        transferPlayback();
-      }
+    if (!activeDeviceId) {
+      console.log("[Connect] No active device, taking control...");
+      transferPlayback(deviceId);
     }
 
     if (currentSong && currentSong.id !== song.id) {

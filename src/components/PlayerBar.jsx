@@ -72,7 +72,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   useEffect(() => {
     loadedSongIdRef.current = null;
     if (currentSong) {
-      const isVideoSong = Boolean(currentSong.is_video || currentSong.video_url);
+      const isVideoSong = Boolean(currentSong.is_video);
       setShowVideo(isVideoSong);
     }
   }, [currentSong?.id]);
@@ -374,12 +374,20 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     const activeAudio = activeChannel === 'A' ? main : sec;
     const normalize = (url) => { try { return new URL(url).pathname + new URL(url).search; } catch { return url; } };
 
-    if (normalize(activeAudio.src) !== normalize(currentSong.url)) {
-      activeAudio.currentTime = 0;
-      activeAudio.src = currentSong.url;
-      if (isPlaying && activeDeviceId === deviceId) activeAudio.play().catch(() => {});
+    const hasSongChanged = activeAudio.dataset.songId !== currentSong.id;
+    const hasUrlChanged = normalize(activeAudio.src) !== normalize(currentSong.url);
+
+    if (hasSongChanged || hasUrlChanged) {
+      activeAudio.dataset.songId = currentSong.id;
+      if (hasUrlChanged) {
+        activeAudio.src = currentSong.url;
+      }
+      activeAudio.currentTime = 0; // Force time reset on song changes
+      if (isPlaying && activeDeviceId === deviceId) {
+        activeAudio.play().catch((err) => console.warn("[PlayerBar] play error:", err));
+      }
     }
-  }, [currentSong?.id, activeChannel, activeDeviceId, deviceId, isPlaying, useYtIframeAudio]);
+  }, [currentSong?.id, currentSong?.url, activeChannel, activeDeviceId, deviceId, isPlaying, useYtIframeAudio]);
 
   // Sincronizar PLAY/PAUSE
   useEffect(() => {

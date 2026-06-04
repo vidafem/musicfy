@@ -16,23 +16,25 @@ import { fetchWithTimeout } from './fetchHelper';
 export function getHighResThumbnail(url) {
   if (!url) return '';
   
-  // 1. Google user content (portadas/avatares)
+  // 1. Google user content (portadas/avatares de youtube music)
   if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
-    // Reemplazar =w\d+-h\d+ por =w544-h544
-    let highResUrl = url.replace(/=w\d+-h\d+/, '=w544-h544');
-    // Reemplazar =s\d+ por =s512
-    highResUrl = highResUrl.replace(/=s\d+/, '=s512');
+    // Reemplaza tanto =w120-h120 como /w120-h120/ por w544-h544
+    let highResUrl = url.replace(/([=/])w\d+-h\d+/, '$1w544-h544')
+                        .replace(/([=/])s\d+([^\d]|$)/, '$1s512$2');
     return highResUrl;
   }
   
   // 2. YouTube thumbnails estándar
   if (url.includes('ytimg.com') || url.includes('youtube.com')) {
-    if (url.includes('/default.jpg')) {
-      return url.replace('/default.jpg', '/hqdefault.jpg');
+    const match = url.match(/\/vi\/([^\/]+)/);
+    if (match && match[1]) {
+      const videoId = match[1];
+      // hqdefault (480x360) es el estándar de alta calidad seguro en todos los videos
+      return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     }
-    if (url.includes('/mqdefault.jpg')) {
-      return url.replace('/mqdefault.jpg', '/hqdefault.jpg');
-    }
+    // Fallback simple si no coincide /vi/
+    if (url.includes('/default.jpg')) return url.replace('/default.jpg', '/hqdefault.jpg');
+    if (url.includes('/mqdefault.jpg')) return url.replace('/mqdefault.jpg', '/hqdefault.jpg');
   }
   
   return url;

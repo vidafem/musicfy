@@ -131,6 +131,25 @@ export const YouTubeProvider = {
   },
   
   async getStreamUrl(youtubeId) {
+    // 0. Comprobar caché local (en memoria o localStorage con tiempo de expiración)
+    try {
+      const cacheKey = `musicfy_stream_cache_${youtubeId}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { url, expiresAt } = JSON.parse(cached);
+        if (Date.now() < expiresAt) {
+          console.log('[YouTubeProvider] ✅ Usando stream desde caché local (expira en', Math.round((expiresAt - Date.now()) / 60000), 'minutos)');
+          return url;
+        } else {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    } catch (e) {
+      console.warn('[YouTubeProvider] Error leyendo caché de stream:', e);
+    }
+
+    let resolvedUrl = null;
+
     // Intento 1: Backend serverless (Vercel) — usa Cobalt + Invidious + Piped + ytdl en paralelo
     try {
       const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`, {}, 35000)
@@ -138,30 +157,44 @@ export const YouTubeProvider = {
         const { url } = await res.json()
         if (url) {
           console.log('[YouTubeProvider] ✅ Stream resuelto via backend')
-          return url
+          resolvedUrl = url
         }
       }
-      console.warn('[YouTubeProvider] Backend no devolvió stream, intentando Worker proxy...')
     } catch (e) {
       console.warn('[YouTubeProvider] Backend falló, intentando Worker proxy...', e.message)
     }
 
     // Intento 2: Proxy liviano de Piped/Invidious (función serverless separada, sin deps pesadas)
-    try {
-      const isLocal = typeof window !== 'undefined' && 
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      const proxyBase = isLocal ? 'http://localhost:5000' : ''
-      const proxyUrl = `${proxyBase}/api/piped-proxy?id=${youtubeId}`
-      const res = await fetchWithTimeout(proxyUrl, {}, 15000)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.url) {
-          console.log('[YouTubeProvider] ✅ Stream resuelto via piped-proxy')
-          return data.url
+    if (!resolvedUrl) {
+      try {
+        const isLocal = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        const proxyBase = isLocal ? 'http://localhost:5000' : ''
+        const proxyUrl = `${proxyBase}/api/piped-proxy?id=${youtubeId}`
+        const res = await fetchWithTimeout(proxyUrl, {}, 15000)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.url) {
+            console.log('[YouTubeProvider] ✅ Stream resuelto via piped-proxy')
+            resolvedUrl = data.url
+          }
         }
+      } catch (e) {
+        console.warn('[YouTubeProvider] Piped proxy falló:', e.message)
       }
-    } catch (e) {
-      console.warn('[YouTubeProvider] Piped proxy falló:', e.message)
+    }
+
+    if (resolvedUrl) {
+      // Guardar en caché por 4 horas (los enlaces de Google Video expiran a las 6 horas)
+      try {
+        localStorage.setItem(`musicfy_stream_cache_${youtubeId}`, JSON.stringify({
+          url: resolvedUrl,
+          expiresAt: Date.now() + 4 * 60 * 60 * 1000 // 4 horas
+        }));
+      } catch (e) {
+        console.warn('[YouTubeProvider] Error guardando en caché de stream:', e);
+      }
+      return resolvedUrl;
     }
 
     console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
