@@ -59,7 +59,13 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   const setMixerState = usePlayerStore(state => state.setMixerState);
   const clearMixerState = usePlayerStore(state => state.clearMixerState);
   const user = useAuthStore(state => state.user);
-  const useYtIframeAudio = currentSong?.source === 'youtube' && (currentSong?.url === 'youtube_iframe_fallback' || !currentSong?.url);
+  const isDirectAudioUrl = (url) => {
+    if (!url) return false;
+    if (url.startsWith('blob:') || url.startsWith('data:')) return true;
+    if (url.includes('googlevideo.com') || url.includes('piped-proxy') || url.includes('/api/stream') || url.includes('/api/piped-proxy')) return true;
+    return false;
+  };
+  const useYtIframeAudio = currentSong?.source === 'youtube' && !isDirectAudioUrl(currentSong?.url);
   
   const showDeviceSelector = usePlayerStore(state => state.showDeviceSelector);
   const setShowDeviceSelector = usePlayerStore(state => state.setShowDeviceSelector);
@@ -489,6 +495,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
   };
 
   const handleAudioError = (e) => {
+    if (useYtIframeAudio) return; // Mute / ignore local audio errors during YT iframe fallback
     const audio = e.target;
     if (!audio.getAttribute('src') || audio.src.includes(window.location.origin)) return;
     setErrorMessage("Error de conexión: No se pudo cargar la música.");

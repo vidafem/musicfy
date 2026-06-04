@@ -590,7 +590,14 @@ export const usePlayerStore = create((set, get) => ({
     dbStore.set('queue', queue);
 
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    get().sendCommand('PLAY_SONG', { song: { ...song, url: song.url }, updatedAt });
+    let songToSend = newSongState;
+    if (newSongState && (newSongState.url?.startsWith('blob:') || newSongState.url?.startsWith('data:'))) {
+      const originalSong = queue.find(s => s.id === song.id);
+      if (originalSong && originalSong.url) {
+        songToSend = { ...newSongState, url: originalSong.url };
+      }
+    }
+    get().sendCommand('PLAY_SONG', { song: songToSend, updatedAt });
     get().saveRemotePlaybackState();
     
     // Registrar reproducción en el recomendador de gustos
