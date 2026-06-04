@@ -742,7 +742,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
               {hasVideo && (
                 <button 
                   className={`fs-icon-btn ${showVideo ? 'active' : ''}`} 
-                  onClick={(e) => { e.stopPropagation(); resumeWebAudioContext(); setShowVideo(!showVideo); setShowLyrics(false); setShowQueue(false); }}
+                  onClick={(e) => { e.stopPropagation(); resumeWebAudioContext(); setShowVideo(!showVideo); }}
                   title="Ver Video"
                 >
                   <Video size={28} />
@@ -758,8 +758,8 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
                   {isVideoFullscreen ? <Minimize size={28} /> : <Maximize size={28} />}
                 </button>
               )}
-              <button className={`fs-icon-btn ${showLyrics ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowLyrics(!showLyrics); setShowQueue(false); setShowVideo(false); }}><MessageSquare size={28} fill={showLyrics ? "currentColor" : "none"} /></button>
-              <button className={`fs-icon-btn ${showQueue ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowQueue(!showQueue); setShowLyrics(false); setShowVideo(false); }}><ListMusic size={28} /></button>
+              <button className={`fs-icon-btn ${showLyrics ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowLyrics(!showLyrics); }}><MessageSquare size={28} fill={showLyrics ? "currentColor" : "none"} /></button>
+              <button className={`fs-icon-btn ${showQueue ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowQueue(!showQueue); }}><ListMusic size={28} /></button>
             </div>
           </div>
         </div>

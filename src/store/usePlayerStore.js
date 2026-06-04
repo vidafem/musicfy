@@ -119,7 +119,8 @@ export const usePlayerStore = create((set, get) => ({
       mixerState,
       updatedAt
     });
-    set({ playbackUpdatedAt: updatedAt });
+    // NO actualizar localmente playbackUpdatedAt en el master durante difusiones periódicas
+    // para evitar activar falsas sincronizaciones remotas forzadas (saltos de audio)
   },
 
   setMixerState: (mixerState, shouldBroadcast = true) => {
@@ -706,21 +707,7 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     if (nextSong) {
-      const updatedAt = Date.now();
-      set({
-        currentSong: nextSong,
-        isPlaying: true,
-        currentTime: 0, // Reset estricto
-        playbackUpdatedAt: updatedAt
-      });
-      if (!nextSong.lyrics) get().fetchSongDetails(nextSong.id);
-      get().sendCommand('PLAY_SONG', { song: nextSong, updatedAt });
-      get().saveRemotePlaybackState();
-      
-      // Registrar reproducción en el recomendador de gustos
-      import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
-        recommendationEngine.recordPlay(nextSong, queue);
-      }).catch(e => console.error(e));
+      get().playSong(nextSong);
     }
   },
 
@@ -741,22 +728,8 @@ export const usePlayerStore = create((set, get) => ({
       const newHistory = [...playbackHistory];
       const prevSong = newHistory.pop();
 
-      set({
-        currentSong: prevSong,
-        isPlaying: true,
-        playbackHistory: newHistory,
-        playbackUpdatedAt: Date.now()
-      });
-
-      if (!prevSong.lyrics) get().fetchSongDetails(prevSong.id);
-      get().sendCommand('PLAY_SONG', { song: prevSong, updatedAt: Date.now() });
-      get().saveRemotePlaybackState();
-      
-      // Registrar reproducción en el recomendador de gustos
-      const allSongs = get().queue;
-      import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
-        recommendationEngine.recordPlay(prevSong, allSongs);
-      }).catch(e => console.error(e));
+      set({ playbackHistory: newHistory });
+      get().playSong(prevSong);
 
       console.log("[Player] ⏪ Retrocediendo a:", prevSong.title);
     } else {
