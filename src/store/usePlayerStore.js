@@ -542,10 +542,18 @@ export const usePlayerStore = create((set, get) => ({
     if (needsYtResolution) {
       try {
         const { HybridMusicProvider } = await import('../providers/MusicProvider');
-        playableUrl = await HybridMusicProvider.getPlayableUrl(song);
+        playableUrl = await Promise.race([
+          HybridMusicProvider.getPlayableUrl(song),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de resolución rápida (6s)')), 6000))
+        ]);
       } catch (e) {
-        console.warn('[Player] Backend stream resolution failed, falling back to client-side YouTube Iframe:', e.message);
+        console.warn('[Player] Backend stream resolution failed or timed out, falling back to client-side YouTube Iframe:', e.message);
         playableUrl = 'youtube_iframe_fallback';
+
+        // Intentar resolver de fondo para que se guarde en el caché para la próxima vez
+        import('../providers/MusicProvider').then(({ HybridMusicProvider }) => {
+          HybridMusicProvider.getPlayableUrl(song).catch(() => {});
+        }).catch(() => {});
       }
     } else if (song.url && !song.url.startsWith('data:') && !song.url.startsWith('blob:') && !isYouTube) {
       const { CacheManager } = await import('../utils/cacheManager');
