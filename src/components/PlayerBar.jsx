@@ -554,7 +554,7 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
                 secAudio.src = url;
                 secAudio.load(); // Iniciar buffer silenciosamente
               }
-            }).catch(e => console.warn(e));
+            }).catch(e => console.log('[Gapless Preload] No se pudo pre-cargar el buffer de:', nextSong.title, '-', e.message));
           });
         }
       }

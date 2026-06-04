@@ -542,8 +542,10 @@ export const usePlayerStore = create((set, get) => ({
     if (needsYtResolution) {
       try {
         const { HybridMusicProvider } = await import('../providers/MusicProvider');
+        const resolutionPromise = HybridMusicProvider.getPlayableUrl(song);
+        resolutionPromise.catch(() => {}); // Evitar error "Uncaught (in promise)" en la consola si la resolución falla tarde
         playableUrl = await Promise.race([
-          HybridMusicProvider.getPlayableUrl(song),
+          resolutionPromise,
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de resolución rápida (6s)')), 6000))
         ]);
       } catch (e) {
