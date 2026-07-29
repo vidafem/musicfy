@@ -192,13 +192,14 @@ export default function SongMenu() {
                 </button>
 
                 {playlists.map(pl => (
-                  <button key={pl.id} className="menu-playlist-item" onClick={() => handleAddToPlaylist(pl.id, pl.title)}>
+                  <button key={pl.id} className="menu-playlist-item" onClick={() => handleAddToPlaylist(pl.id, pl.name || pl.title)}>
                     <div className="playlist-icon-square">
                       <FolderPlus size={16} />
                     </div>
-                    <span>{pl.title}</span>
+                    <span>{pl.name || pl.title}</span>
                   </button>
                 ))}
+
               </div>
             </div>
           )}

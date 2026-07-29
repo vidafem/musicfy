@@ -138,10 +138,33 @@ export const useSupabasePlaylists = () => {
     }
   };
 
-  // Agregar canción a playlist
-  const addSongToPlaylist = async (playlistId, songId) => {
-    if (!user) return false;
+  // Agregar canción a playlist (soporta tanto objeto song como string songId)
+  const addSongToPlaylist = async (playlistId, songInput) => {
+    if (!user || !playlistId || !songInput) return false;
+    
     try {
+      const { stringToUuid } = await import('../utils/uuidHelper');
+      const songObject = typeof songInput === 'object' ? songInput : { id: songInput };
+      const rawId = songObject.id || songObject.youtube_id || songInput;
+      const validUuid = stringToUuid(rawId);
+
+      // Si tenemos los metadatos de la canción (ej: canción externa de YouTube), registrarla primero en 'songs'
+      if (typeof songInput === 'object' && songInput.title) {
+        try {
+          await supabase.from('songs').upsert({
+            id: validUuid,
+            title: songInput.title || 'Sin título',
+            artist: songInput.artist || 'Artista Desconocido',
+            cover_url: songInput.cover_url || '',
+            url: songInput.url || null,
+            source: songInput.source || 'youtube',
+            duration: songInput.duration || 0
+          }, { onConflict: 'id' });
+        } catch (upsertErr) {
+          console.warn('[useSupabasePlaylists] Warning al registrar canción en DB:', upsertErr);
+        }
+      }
+
       // Obtener la máxima posición actual
       const { data: posData } = await supabase
         .from('playlist_songs')
@@ -149,7 +172,7 @@ export const useSupabasePlaylists = () => {
         .eq('playlist_id', playlistId)
         .order('position', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const nextPosition = (posData?.position ?? -1) + 1;
 
@@ -158,7 +181,7 @@ export const useSupabasePlaylists = () => {
         .insert([
           {
             playlist_id: playlistId,
-            song_id: songId,
+            song_id: validUuid,
             position: nextPosition
           }
         ]);
@@ -168,10 +191,11 @@ export const useSupabasePlaylists = () => {
       return true;
     } catch (err) {
       setError(err.message);
-      console.error('Error agregando canción:', err);
+      console.error('Error agregando canción a playlist:', err);
       return false;
     }
   };
+
 
   // Eliminar canción de playlist
   const removeSongFromPlaylist = async (playlistId, songId) => {

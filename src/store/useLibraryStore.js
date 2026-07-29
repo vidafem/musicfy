@@ -148,65 +148,57 @@ export const useLibraryStore = create((set, get) => ({
   },
 
   ensureSongInDb: async (song) => {
-    // Si tiene un UUID, verificar si realmente existe en la BD
-    if (song.id && song.id.length === 36) {
-      const { data: existing } = await supabase
-        .from('songs')
-        .select('id')
-        .eq('id', song.id)
-        .maybeSingle();
-      if (existing) {
-        return existing.id;
-      }
-    }
+    if (!song) return null;
+    const { stringToUuid, isUuid } = await import('../utils/uuidHelper');
 
     const isYouTube = song.source === 'youtube' || song.is_external;
-    const yid = song.youtube_id || song.id;
+    const yid = song.youtube_id || (isYouTube ? song.id : null);
+    const validUuid = isUuid(song.id) ? song.id : stringToUuid(song.id || yid || song.url);
 
-    // Check by youtube_id first for external tracks
+    // Verificar si la canción ya existe en la BD por ID
+    const { data: existing } = await supabase
+      .from('songs')
+      .select('id')
+      .eq('id', validUuid)
+      .maybeSingle();
+
+    if (existing) {
+      return existing.id;
+    }
+
     if (isYouTube && yid) {
-      const { data: existing } = await supabase
-          .from('songs')
-          .select('id')
-          .eq('youtube_id', yid)
-          .maybeSingle();
-
-      if (existing) return existing.id;
-    }
-
-    // Check by URL or Title/Artist
-    if (song.url) {
-      const { data: existing } = await supabase
-          .from('songs')
-          .select('id')
-          .eq('url', song.url)
-          .maybeSingle();
-
-      if (existing) return existing.id;
-    }
-
-    // Insert new song immediately (default to '[Streaming]' lyrics to prevent blocking the UI)
-    const { data, error } = await supabase
+      const { data: existingYt } = await supabase
         .from('songs')
-        .insert([{
-            title: song.title,
-            artist: song.artist || 'Artista Desconocido',
-            url: song.url || (isYouTube ? `https://www.youtube.com/watch?v=${yid}` : 'local_file'),
-            cover_url: song.cover_url || '',
-            background_url: song.background_url || song.cover_url || '',
-            duration: song.duration || 0,
-            lyrics: song.lyrics || '[Streaming]',
-            source: isYouTube ? 'youtube' : (song.source || 'local'),
-            youtube_id: isYouTube ? yid : null,
-            is_video: song.is_video || false,
-            video_url: song.video_url || (isYouTube ? `https://www.youtube.com/watch?v=${yid}` : null)
-        }])
-        .select('*')
-        .single();
+        .select('id')
+        .eq('youtube_id', yid)
+        .maybeSingle();
+
+      if (existingYt) return existingYt.id;
+    }
+
+    // Insertar nueva canción con UUID determinista
+    const { data, error } = await supabase
+      .from('songs')
+      .upsert([{
+        id: validUuid,
+        title: song.title || 'Sin título',
+        artist: song.artist || 'Artista Desconocido',
+        url: song.url || (isYouTube && yid ? `https://www.youtube.com/watch?v=${yid}` : 'local_file'),
+        cover_url: song.cover_url || '',
+        background_url: song.background_url || song.cover_url || '',
+        duration: song.duration || 0,
+        lyrics: song.lyrics || '[Streaming]',
+        source: isYouTube ? 'youtube' : (song.source || 'local'),
+        youtube_id: isYouTube ? yid : null,
+        is_video: song.is_video || false,
+        video_url: song.video_url || (isYouTube && yid ? `https://www.youtube.com/watch?v=${yid}` : null)
+      }], { onConflict: 'id' })
+      .select('*')
+      .single();
 
     if (error) {
-        console.error('Error ensuring song in DB:', error);
-        return null;
+      console.error('[ensureSongInDb] Error registrando canción:', error);
+      return validUuid;
     }
 
     const songId = data.id;
@@ -216,10 +208,10 @@ export const useLibraryStore = create((set, get) => ({
       is_local: data.source !== 'youtube'
     };
 
-    // Agregar de inmediato al caché en memoria
     set(state => ({
-      dbSongs: [newSongObj, ...state.dbSongs]
+      dbSongs: [newSongObj, ...state.dbSongs.filter(s => s.id !== songId)]
     }));
+
 
     // Fetch and save lyrics asynchronously in the background if they weren't provided
     if (!song.lyrics && song.title) {

@@ -1,13 +1,21 @@
-import { supabase } from '../supabaseClient'
-import { getHighResThumbnail } from '../utils/pipedService'
-import { WORKER_URL, BACKEND_URL } from '../config'
-import { fetchWithTimeout } from '../utils/fetchHelper'
+import { supabase } from '../supabaseClient';
+import { getHighResThumbnail } from '../utils/pipedService';
+import { BACKEND_URL } from '../config';
+import { fetchWithTimeout } from '../utils/fetchHelper';
+import { stringToUuid } from '../utils/uuidHelper';
 
-// Bandera de autocuración de esquema para evitar HTTP 400 en consola de red
 let dbSchemaSupportsSource = true;
 
+// Nodos públicos de Piped/Invidious para consultas directas desde el cliente
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://api.piped.video',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.colby.cloud'
+];
+
 // ─────────────────────────────────────────────
-// PROVEEDOR LOCAL (fuente principal existente)
+// PROVEEDOR LOCAL
 // ─────────────────────────────────────────────
 export const LocalProvider = {
   name: 'local',
@@ -16,7 +24,6 @@ export const LocalProvider = {
     try {
       const cleanQuery = query ? String(query).trim() : '';
       
-      // Si ya detectamos que la columna 'source' no existe en la BD, ir directo al fallback
       if (!dbSchemaSupportsSource) {
         let fallbackQuery = supabase.from('songs').select('*');
         if (cleanQuery) {
@@ -32,14 +39,12 @@ export const LocalProvider = {
         q = q.or(`title.ilike.%${cleanQuery}%,artist.ilike.%${cleanQuery}%,album.ilike.%${cleanQuery}%`);
       }
       
-      // Intentar primero filtrando por source = local
       const { data, error } = await q.eq('source', 'local').limit(limit);
       
       if (error) {
         if (error.message?.includes('column songs.source does not exist') || error.status === 400 || error.code === 'PGRST100') {
           dbSchemaSupportsSource = false;
         }
-        console.warn('[LocalProvider] Columna "source" no encontrada o error de consulta, aplicando fallback:', error.message);
         let fallbackQuery = supabase.from('songs').select('*');
         if (cleanQuery) {
           fallbackQuery = fallbackQuery.or(`title.ilike.%${cleanQuery}%,artist.ilike.%${cleanQuery}%,album.ilike.%${cleanQuery}%`);
@@ -57,10 +62,12 @@ export const LocalProvider = {
   },
   
   async getAll(limit = 50) {
-    const cached = localStorage.getItem('musicfy_cached_queue')
+    const cached = localStorage.getItem('musicfy_cached_queue');
     if (cached) {
-      const parsed = JSON.parse(cached)
-      if (parsed.length > 0) return parsed
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.length > 0) return parsed;
+      } catch (e) {}
     }
     
     try {
@@ -88,8 +95,6 @@ export const LocalProvider = {
         if (error.message?.includes('column songs.source does not exist') || error.status === 400 || error.code === 'PGRST100') {
           dbSchemaSupportsSource = false;
         }
-        console.warn('[LocalProvider] Columnas extendidas no encontradas, aplicando fallback básico:', error.message);
-        // Fallback a columnas seguras que sí existen de forma garantizada
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('songs')
           .select('id,title,artist,cover_url,url,created_at,lyrics,background_url,duration,video_url')
@@ -110,160 +115,184 @@ export const LocalProvider = {
       return [];
     }
   }
-}
+};
 
 // ─────────────────────────────────────────────
-// PROVEEDOR YOUTUBE (catálogo externo)
+// PROVEEDOR YOUTUBE
 // ─────────────────────────────────────────────
 export const YouTubeProvider = {
   name: 'youtube',
   
   async search(query, limit = 10) {
-    try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`, {}, 15000)
-      if (!res.ok) return []
-      const data = await res.json()
-      return (data.items || []).map(normalizeYouTube)
-    } catch (e) {
-      console.error('[YouTubeProvider] Error al buscar:', e)
-      return []
+    if (!query || !query.trim()) return [];
+    const cleanQuery = query.trim();
+
+    // 1. Intentar consulta directa desde el cliente a múltiples instancias de Piped
+    for (const instance of PIPED_INSTANCES) {
+      try {
+        const url = `${instance}/search?q=${encodeURIComponent(cleanQuery)}&filter=music_songs`;
+        const res = await fetchWithTimeout(url, {}, 8000);
+        if (res.ok) {
+          const data = await res.json();
+          const items = data.items || data;
+          if (Array.isArray(items) && items.length > 0) {
+            console.log(`[YouTubeProvider] ✅ Búsqueda exitosa en cliente via ${instance}`);
+            return items.slice(0, limit).map(normalizePipedItem);
+          }
+        }
+      } catch (e) {
+        console.warn(`[YouTubeProvider] Instancia Piped ${instance} falló:`, e.message);
+      }
     }
+
+    // 2. Fallback a backend si está disponible
+    try {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(cleanQuery)}&limit=${limit}`, {}, 10000);
+      if (res.ok) {
+        const data = await res.json();
+        return (data.items || []).map(normalizeYouTubeItem);
+      }
+    } catch (e) {
+      console.error('[YouTubeProvider] Error al buscar via backend:', e);
+    }
+
+    return [];
   },
   
   async getStreamUrl(youtubeId) {
-    // 0. Comprobar caché local (en memoria o localStorage con tiempo de expiración)
+    if (!youtubeId) throw new Error('ID de YouTube no especificado');
+
+    // 0. Caché local de 4 horas
     try {
       const cacheKey = `musicfy_stream_cache_${youtubeId}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const { url, expiresAt } = JSON.parse(cached);
         if (Date.now() < expiresAt) {
-          console.log('[YouTubeProvider] ✅ Usando stream desde caché local (expira en', Math.round((expiresAt - Date.now()) / 60000), 'minutos)');
+          console.log('[YouTubeProvider] ✅ Stream desde caché local');
           return url;
         } else {
           localStorage.removeItem(cacheKey);
         }
       }
-    } catch (e) {
-      console.warn('[YouTubeProvider] Error leyendo caché de stream:', e);
-    }
+    } catch (e) {}
 
     let resolvedUrl = null;
 
-    // Intento 1: Backend serverless (Vercel) — usa Cobalt + Invidious + Piped + ytdl en paralelo
-    try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${youtubeId}`, {}, 35000)
-      if (res.ok) {
-        const { url } = await res.json()
-        if (url) {
-          console.log('[YouTubeProvider] ✅ Stream resuelto via backend')
-          resolvedUrl = url
-        }
-      }
-    } catch (e) {
-      console.warn('[YouTubeProvider] Backend falló, intentando Worker proxy...', e.message)
-    }
-
-    // Intento 2: Proxy liviano de Piped/Invidious (función serverless separada, sin deps pesadas)
-    if (!resolvedUrl) {
+    // Intento 1: Consulta directa desde el navegador cliente a instancias Piped
+    for (const instance of PIPED_INSTANCES) {
       try {
-        const isLocal = typeof window !== 'undefined' && 
-          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        const proxyBase = isLocal ? 'http://localhost:5000' : ''
-        const proxyUrl = `${proxyBase}/api/piped-proxy?id=${youtubeId}`
-        const res = await fetchWithTimeout(proxyUrl, {}, 15000)
+        const res = await fetchWithTimeout(`${instance}/streams/${youtubeId}`, {}, 8000);
         if (res.ok) {
-          const data = await res.json()
-          if (data.url) {
-            console.log('[YouTubeProvider] ✅ Stream resuelto via piped-proxy')
-            resolvedUrl = data.url
+          const data = await res.json();
+          const audioStreams = data.audioStreams || [];
+          if (audioStreams.length > 0) {
+            // Ordenar por bitrate descendente
+            audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            resolvedUrl = audioStreams[0].url;
+            if (resolvedUrl) {
+              console.log(`[YouTubeProvider] ✅ Stream resuelto directamente en cliente via ${instance}`);
+              break;
+            }
           }
         }
       } catch (e) {
-        console.warn('[YouTubeProvider] Piped proxy falló:', e.message)
+        console.warn(`[YouTubeProvider] Falló stream en ${instance}:`, e.message);
       }
+    }
+
+    // Intento 2: Backend o proxy serverless
+    if (!resolvedUrl) {
+      try {
+        const proxyUrl = `/api/piped-proxy?id=${youtubeId}`;
+        const res = await fetchWithTimeout(proxyUrl, {}, 10000);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) resolvedUrl = data.url;
+        }
+      } catch (e) {}
     }
 
     if (resolvedUrl) {
-      // Guardar en caché por 4 horas (los enlaces de Google Video expiran a las 6 horas)
       try {
         localStorage.setItem(`musicfy_stream_cache_${youtubeId}`, JSON.stringify({
           url: resolvedUrl,
-          expiresAt: Date.now() + 4 * 60 * 60 * 1000 // 4 horas
+          expiresAt: Date.now() + 4 * 60 * 60 * 1000
         }));
-      } catch (e) {
-        console.warn('[YouTubeProvider] Error guardando en caché de stream:', e);
-      }
+      } catch (e) {}
       return resolvedUrl;
     }
 
-    console.error('[YouTubeProvider] ❌ Todos los métodos de resolución fallaron')
-    throw new Error('No se pudo obtener la URL del stream desde ninguna fuente')
-  },
-  
-  async getMetadata(youtubeId) {
-    // Si no está soportado en backend, retornar null o consultar metadata
-    try {
-      const res = await fetchWithTimeout(`${BACKEND_URL}/metadata/${youtubeId}`, {}, 15000)
-      if (!res.ok) return null
-      return res.json()
-    } catch {
-      return null
-    }
+    throw new Error('No se pudo obtener la URL del stream desde ninguna fuente');
   }
-}
+};
 
 // ─────────────────────────────────────────────
-// PROVEEDOR UNIFICADO (combina ambos)
+// PROVEEDOR UNIFICADO
 // ─────────────────────────────────────────────
 export const HybridMusicProvider = {
-  
   async search(query, options = { includeExternal: true, limit: 20 }) {
     const [localResults, youtubeResults] = await Promise.allSettled([
       LocalProvider.search(query, options.limit),
-      options.includeExternal ? YouTubeProvider.search(query, 5) : Promise.resolve([])
-    ])
+      options.includeExternal ? YouTubeProvider.search(query, 8) : Promise.resolve([])
+    ]);
     
-    const local = localResults.status === 'fulfilled' ? localResults.value : []
-    const external = youtubeResults.status === 'fulfilled' ? youtubeResults.value : []
+    const local = localResults.status === 'fulfilled' ? localResults.value : [];
+    const external = youtubeResults.status === 'fulfilled' ? youtubeResults.value : [];
     
-    // Local primero, luego externos
-    return [...local, ...external]
+    return [...local, ...external];
   },
   
-  // Obtener URL reproducible (maneja caché, offline, y YouTube)
   async getPlayableUrl(song) {
     if (song.source === 'local' || !song.source) {
-      const { CacheManager } = await import('../utils/cacheManager')
-      return CacheManager.getOrCacheSong(song)
+      const { CacheManager } = await import('../utils/cacheManager');
+      return CacheManager.getOrCacheSong(song);
     }
-    if (song.source === 'youtube') {
-      return YouTubeProvider.getStreamUrl(song.youtube_id)
+    if (song.source === 'youtube' || song.youtube_id) {
+      const yid = song.youtube_id || (song.id?.startsWith('yt_') ? song.id.replace('yt_', '') : song.id);
+      return YouTubeProvider.getStreamUrl(yid);
     }
-    return song.url
+    return song.url;
   }
-}
+};
 
-// ─────────────────────────────────────────────
-// NORMALIZADORES (estructura común)
-// ─────────────────────────────────────────────
 function normalizeLocal(song) {
-  return { ...song, source: song.source || 'local' }
+  return { ...song, source: song.source || 'local' };
 }
 
-function normalizeYouTube(item) {
+function normalizePipedItem(item) {
+  const yid = item.url ? item.url.replace('/watch?v=', '') : (item.id || item.videoId);
   return {
-    id: `yt_${item.id.videoId}`,
-    title: item.snippet.title,
-    artist: item.snippet.channelTitle,
-    album: '',
-    cover_url: getHighResThumbnail(item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url),
-    url: null,  // Se obtiene en tiempo real via getPlayableUrl
-    youtube_id: item.id.videoId,
+    id: stringToUuid(`yt_${yid}`), // UUID válido para PostgreSQL Supabase
+    youtube_id: yid,
+    title: item.title || 'Sin título',
+    artist: item.uploaderName || item.channelTitle || 'Artista Desconocido',
+    album: 'YouTube Music',
+    cover_url: item.thumbnail || getHighResThumbnail(`https://i.ytimg.com/vi/${yid}/hqdefault.jpg`),
+    url: null,
     source: 'youtube',
-    duration: null,
+    duration: item.duration || 0,
     lyrics: null,
     background_url: null,
-    created_at: item.snippet.publishedAt,
-  }
+    created_at: new Date().toISOString()
+  };
 }
+
+function normalizeYouTubeItem(item) {
+  const yid = item.id?.videoId || item.id;
+  return {
+    id: stringToUuid(`yt_${yid}`),
+    youtube_id: yid,
+    title: item.snippet?.title || 'Sin título',
+    artist: item.snippet?.channelTitle || 'Artista Desconocido',
+    album: 'YouTube Music',
+    cover_url: getHighResThumbnail(item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${yid}/hqdefault.jpg`),
+    url: null,
+    source: 'youtube',
+    duration: 0,
+    lyrics: null,
+    background_url: null,
+    created_at: item.snippet?.publishedAt || new Date().toISOString()
+  };
+}
+
