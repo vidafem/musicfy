@@ -513,71 +513,20 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   playSong: async (song) => {
-    const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback, queue } = get();
+    if (!song) return;
+    const { currentSong, playbackHistory, deviceId, activeDeviceId, transferPlayback, queue } = get();
 
-    // Reanudar contexto de audio en interacción
-    try {
-      const { resumeWebAudioContext } = await import('../services/player/audioNormalizer');
-      resumeWebAudioContext();
-    } catch (e) {}
+    const updatedAt = Date.now();
 
-    // NUEVO: Intentar obtener versión offline primero para reproducción inmediata y ahorro de red
-    try {
-      const { OfflineManager } = await import('../lib/offlineManager');
-      const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
-      if (offlineUrl) {
-        console.log('[Player] Cargando versión offline descargada de:', song.title);
-        song = { ...song, url: offlineUrl, is_offline: true };
-      } else {
-        const isOnline = await OfflineManager.isOnline();
-        if (!isOnline) {
-          console.warn('[Player] Dispositivo offline y pista no descargada:', song.title);
-          return; // Detener reproducción si no hay conectividad ni versión local
-        }
-      }
-    } catch (offlineErr) {
-      console.warn('[Player] Offline validation error:', offlineErr);
-    }
-
-
-    // LÓGICA DE CACHÉ INTELIGENTE (solo para recursos remotos locales)
-    let playableUrl = song.url;
-    const isYouTube = song.source === 'youtube' || song.is_external || (song.url && (song.url.includes('googlevideo.com') || song.url.includes('youtube.com') || song.url.includes('youtu.be')));
-
-    // Si es YouTube y la URL no está definida o es un enlace directo de watch, resolver el stream real.
-    const needsYtResolution = isYouTube && (!song.url || song.url.includes('youtube.com') || song.url.includes('youtu.be') || song.url === 'youtube_stream');
-
-    if (needsYtResolution) {
-      try {
-        const { HybridMusicProvider } = await import('../providers/MusicProvider');
-        const resolutionPromise = HybridMusicProvider.getPlayableUrl(song);
-        resolutionPromise.catch(() => {}); // Evitar error "Uncaught (in promise)" en la consola si la resolución falla tarde
-        playableUrl = await Promise.race([
-          resolutionPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de resolución rápida (6s)')), 6000))
-        ]);
-      } catch (e) {
-        console.warn('[Player] Backend stream resolution failed or timed out, falling back to client-side YouTube Iframe:', e.message);
-        playableUrl = 'youtube_iframe_fallback';
-
-        // Intentar resolver de fondo para que se guarde en el caché para la próxima vez
-        import('../providers/MusicProvider').then(({ HybridMusicProvider }) => {
-          HybridMusicProvider.getPlayableUrl(song).catch(() => {});
-        }).catch(() => {});
-      }
-    } else if (song.url && !song.url.startsWith('data:') && !song.url.startsWith('blob:') && !isYouTube) {
-      const { CacheManager } = await import('../utils/cacheManager');
-      playableUrl = await CacheManager.getOrCacheSong(song);
-      
-      // Pre-cachear la siguiente canción para que no haya saltos
-      const currentIndex = queue.findIndex(s => s.id === song.id);
-      if (currentIndex !== -1 && currentIndex < queue.length - 1 && queue[currentIndex + 1].url) {
-        CacheManager.cacheSong(queue[currentIndex + 1].url);
-      }
-    }
+    // 1. ESTADO SINCRÓNICO INMEDIATO: Garantiza que Mobile Safari / Chrome conserven el token táctil del usuario
+    set({
+      currentSong: song,
+      isPlaying: true,
+      currentTime: 0,
+      playbackUpdatedAt: updatedAt
+    });
 
     if (!activeDeviceId) {
-      console.log("[Connect] No active device, taking control...");
       transferPlayback(deviceId);
     }
 
@@ -585,45 +534,55 @@ export const usePlayerStore = create((set, get) => ({
       set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) });
     }
 
-    const updatedAt = Date.now();
-    // Usamos el playableUrl (que puede ser un blob local o stream de youtube)
-    const newSongState = { ...song, url: playableUrl };
-    set({ 
-      currentSong: newSongState, 
-      isPlaying: true, 
-      currentTime: 0, 
-      playbackUpdatedAt: updatedAt
-    });
+    // 2. Resolver versión offline o URL de stream en segundo plano sin bloquear el toque inicial
+    let playableUrl = song.url;
+    try {
+      const { OfflineManager } = await import('../lib/offlineManager');
+      const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
+      if (offlineUrl) {
+        playableUrl = offlineUrl;
+      }
+    } catch (e) {}
 
-    // Guardar en IndexedDB
-    dbStore.set('currentSong', newSongState);
+    const isYouTube = song.source === 'youtube' || song.is_external || (song.url && (song.url.includes('googlevideo.com') || song.url.includes('youtube.com') || song.url.includes('youtu.be')));
+    const needsYtResolution = isYouTube && (!playableUrl || playableUrl.includes('youtube.com') || playableUrl.includes('youtu.be') || playableUrl === 'youtube_stream');
+
+    if (needsYtResolution) {
+      try {
+        const { HybridMusicProvider } = await import('../providers/MusicProvider');
+        const resolutionPromise = HybridMusicProvider.getPlayableUrl(song);
+        resolutionPromise.catch(() => {});
+        playableUrl = await Promise.race([
+          resolutionPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de resolución rápida (6s)')), 6000))
+        ]);
+      } catch (e) {
+        console.warn('[Player] Stream resolution fallback to iframe:', e.message);
+        playableUrl = 'youtube_iframe_fallback';
+      }
+    } else if (playableUrl && !playableUrl.startsWith('data:') && !playableUrl.startsWith('blob:') && !isYouTube) {
+      try {
+        const { CacheManager } = await import('../utils/cacheManager');
+        playableUrl = await CacheManager.getOrCacheSong(song);
+      } catch (e) {}
+    }
+
+    // Si la URL resuelta es diferente, actualizar el objeto de la canción activa
+    const updatedSong = { ...song, url: playableUrl };
+    set({ currentSong: updatedSong });
+
+    // Guardar estado en IndexedDB y transmitir a Connect Pro
+    dbStore.set('currentSong', updatedSong);
     dbStore.set('queue', queue);
 
     if (!song.lyrics) get().fetchSongDetails(song.id);
-    let songToSend = newSongState;
-    if (newSongState && (newSongState.url?.startsWith('blob:') || newSongState.url?.startsWith('data:'))) {
-      const originalSong = queue.find(s => s.id === song.id);
-      if (originalSong && originalSong.url) {
-        songToSend = { ...newSongState, url: originalSong.url };
-      }
-    }
-    get().sendCommand('PLAY_SONG', { song: songToSend, updatedAt });
+    get().sendCommand('PLAY_SONG', { song: updatedSong, updatedAt });
     get().saveRemotePlaybackState();
-    
-    // Registrar reproducción en el recomendador de gustos
-    import('../utils/recommendationEngine').then(({ recommendationEngine }) => {
-      recommendationEngine.recordPlay(song, queue);
-    }).catch(e => console.error(e));
 
     // Cargar autoplay en segundo plano
     get().loadAutoplayNext(song);
-    
-    // Mantenimiento de caché
-    try {
-      const { CacheManager } = await import('../utils/cacheManager');
-      CacheManager.cleanOldCache(30);
-    } catch {}
   },
+
 
   togglePlay: () => {
     const { isPlaying, activeDeviceId, transferPlayback, sendCommand } = get();

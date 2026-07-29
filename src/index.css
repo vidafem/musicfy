@@ -36,6 +36,21 @@ html, body {
   min-height: 100vh;
   /* Prevenir rebote excesivo en iOS Safari */
   overscroll-behavior-y: none;
+  touch-action: manipulation;
+}
+
+/* Respuesta táctil instantánea de 0ms en celulares */
+button, a, .focusable, [role="button"] {
+  touch-action: manipulation;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button:active, a:active, .focusable:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+  transition: transform 0.08s ease;
 }
 
 /* Liquid Glass Utility Base */
@@ -46,9 +61,11 @@ html, body {
   border: 1px solid var(--glass-border);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   border-radius: 28px;
+  transform: translateZ(0);
 }
 glass-element {
   display: inline-block;
   --glass-padding: 0px;
 }
+
 

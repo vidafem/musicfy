@@ -16,38 +16,22 @@ const isLocalhost = typeof window !== 'undefined' && (
   window.location.hostname.startsWith('172.')
 );
 
-// URL del backend:
-// 1. Prioridad: variable de entorno VITE_BACKEND_URL (apunta a Render en producción, sanitizada)
-// 2. Si estamos en red local, usar el backend local en el mismo host
-// 3. Fallback a /api (Vercel serverless, limitado)
 const getBackendUrl = () => {
   let url = import.meta.env.VITE_BACKEND_URL;
   if (url) {
-    url = url.trim().replace(/\/+$/, ''); // Eliminar barras diagonales al final
+    url = url.trim().replace(/\/+$/, '');
     if (!url.endsWith('/api')) {
       url = `${url}/api`;
     }
     return url;
   }
-  return isLocalhost
-    ? `${window.location.protocol}//${window.location.hostname}:5000/api`
-    : '/api';
+  // En navegadores móviles y desktop, preferir ruta relativa /api para aprovechar el proxy de Vite o Vercel
+  if (typeof window !== 'undefined') {
+    return '/api';
+  }
+  return 'http://localhost:5000/api';
 };
 
 export const BACKEND_URL = getBackendUrl();
 
-// Advertir al usuario en la consola si está en producción pero usa las funciones de Vercel
-if (typeof window !== 'undefined' && !isLocalhost && BACKEND_URL === '/api') {
-  console.warn(
-    '%c[Musicfy] ⚠️ ALERTA DE CONFIGURACIÓN:\n' +
-    'El frontend está corriendo en producción pero no se ha detectado la variable de entorno VITE_BACKEND_URL.\n' +
-    'Las peticiones de streaming se están haciendo a Vercel (/api/stream), las cuales fallarán con error 503 debido al bloqueo de IPs de AWS por parte de YouTube.\n\n' +
-    'Para solucionarlo:\n' +
-    '1. Despliega el backend (carpeta /server) en Render.com o similar.\n' +
-    '2. En el panel de Vercel de tu proyecto, ve a Settings -> Environment Variables.\n' +
-    '3. Agrega la variable: VITE_BACKEND_URL = https://tu-backend-en-render.onrender.com/api\n' +
-    '4. Haz un redeploy en Vercel para aplicar los cambios.',
-    'color: #ff9800; font-weight: bold; font-size: 12px;'
-  );
-}
 
