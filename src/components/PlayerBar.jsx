@@ -395,10 +395,17 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
       setLocalCurrentTime(0);
 
       if (isPlaying && activeDeviceId === deviceId && currentSong.url) {
-        activeAudio.play().catch((err) => console.warn("[PlayerBar] play error:", err));
+        activeAudio.play().catch((err) => {
+          if (err.name === 'NotAllowedError') {
+            console.warn('[PlayerBar] Autoplay pausado por política del navegador. Presiona Play para iniciar.');
+          } else {
+            console.warn("[PlayerBar] play warning:", err.message || err);
+          }
+        });
       }
     }
   }, [currentSong?.id, currentSong?.url, activeChannel, activeDeviceId, deviceId, isPlaying, useYtIframeAudio]);
+
 
 
   // Sincronizar PLAY/PAUSE

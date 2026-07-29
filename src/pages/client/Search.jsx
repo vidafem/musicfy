@@ -70,20 +70,20 @@ export default function SearchPage() {
 
   useEffect(() => {
     loadExploreData();
-    // Cargar historial sincronizado desde Supabase
+    // Cargar historial sincronizado desde Supabase (guardado en settings JSONB)
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data } = await supabase
             .from('profiles')
-            .select('search_history')
+            .select('settings')
             .eq('id', user.id)
             .maybeSingle();
 
-          if (data && Array.isArray(data.search_history) && data.search_history.length > 0) {
-            setSearchHistory(data.search_history);
-            localStorage.setItem('musicfy_search_history', JSON.stringify(data.search_history));
+          if (data?.settings?.search_history && Array.isArray(data.settings.search_history)) {
+            setSearchHistory(data.settings.search_history);
+            localStorage.setItem('musicfy_search_history', JSON.stringify(data.settings.search_history));
           }
         }
       } catch (e) {}
@@ -100,13 +100,16 @@ export default function SearchPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        const { data } = await supabase.from('profiles').select('settings').eq('id', user.id).maybeSingle();
+        const currentSettings = data?.settings || {};
         await supabase
           .from('profiles')
-          .update({ search_history: updated })
+          .update({ settings: { ...currentSettings, search_history: updated } })
           .eq('id', user.id);
       }
     } catch (e) {}
   };
+
 
 
   const loadExploreData = async () => {

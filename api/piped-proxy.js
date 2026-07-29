@@ -1,24 +1,19 @@
-// Lightweight Piped proxy endpoint - separate from the main stream resolver
-// This avoids importing heavy dependencies that may crash the function
+// Endpoint proxy ligero de Piped e Invidious para Vercel
+// Ejecutado Servidor-a-Servidor (sin restricciones de CORS del navegador)
 
 const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.tokhmi.xyz',
-  'https://pipedapi.moomoo.me',
-  'https://pipedapi.syncpundit.io',
-  'https://api-piped.mha.fi',
+  'https://api.piped.video',
   'https://pipedapi.adminforge.de',
-  'https://watchapi.whatever.social',
-  'https://pipedapi.colby.host'
+  'https://pipedapi.colby.cloud',
+  'https://pipedapi.kavin.rocks'
 ];
 
 const INVIDIOUS_INSTANCES = [
+  'https://inv.riverside.rocks',
+  'https://invidious.nerdvpn.de',
+  'https://iv.melmac.space',
   'https://inv.nadeko.net',
-  'https://invidious.fdn.fr',
-  'https://inv.tux.pizza',
-  'https://iv.ggtyler.dev',
-  'https://invidious.protokoll-11.de',
-  'https://vid.puffyan.us'
+  'https://invidious.fdn.fr'
 ];
 
 async function fetchPiped(baseUrl, id, signal) {
@@ -50,9 +45,8 @@ async function fetchInvidious(baseUrl, id, signal) {
 }
 
 export default async function handler(req, res) {
-  // CORS headers
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
+  // CORS Headers universales
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -62,15 +56,14 @@ export default async function handler(req, res) {
 
   const { id } = req.query;
   if (!id || !/^[a-zA-Z0-9_-]{6,20}$/.test(id)) {
-    return res.status(400).json({ error: 'Invalid video ID' });
+    return res.status(400).json({ error: 'ID de video inválido' });
   }
 
-  // Create all fetch promises with individual timeouts
   const allPromises = [];
 
   for (const instance of PIPED_INSTANCES) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     allPromises.push(
       fetchPiped(instance, id, controller.signal)
         .then(url => { clearTimeout(timeoutId); return url; })
@@ -80,7 +73,7 @@ export default async function handler(req, res) {
 
   for (const instance of INVIDIOUS_INSTANCES) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     allPromises.push(
       fetchInvidious(instance, id, controller.signal)
         .then(url => { clearTimeout(timeoutId); return url; })
@@ -93,12 +86,12 @@ export default async function handler(req, res) {
     return res.json({ url, source: 'piped-proxy' });
   } catch (err) {
     return res.status(503).json({
-      error: 'All instances failed',
+      error: 'Todas las instancias fallaron',
       details: err.errors ? err.errors.map(e => e.message) : [err.message]
     });
   }
 }
 
 export const config = {
-  maxDuration: 15
+  maxDuration: 10
 };

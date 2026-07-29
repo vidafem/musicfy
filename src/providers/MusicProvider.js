@@ -179,38 +179,42 @@ export const YouTubeProvider = {
 
     let resolvedUrl = null;
 
-    // Intento 1: Consulta directa desde el navegador cliente a instancias Piped
-    for (const instance of PIPED_INSTANCES) {
-      try {
-        const res = await fetchWithTimeout(`${instance}/streams/${youtubeId}`, {}, 8000);
-        if (res.ok) {
-          const data = await res.json();
-          const audioStreams = data.audioStreams || [];
-          if (audioStreams.length > 0) {
-            // Ordenar por bitrate descendente
-            audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-            resolvedUrl = audioStreams[0].url;
-            if (resolvedUrl) {
-              console.log(`[YouTubeProvider] ✅ Stream resuelto directamente en cliente via ${instance}`);
-              break;
-            }
-          }
+    // Intento 1: Proxy serverless Vercel /api/piped-proxy (CORS garantizado, server-to-server)
+    try {
+      const proxyUrl = `/api/piped-proxy?id=${youtubeId}`;
+      const res = await fetchWithTimeout(proxyUrl, {}, 8000);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          console.log('[YouTubeProvider] ✅ Stream resuelto via serverless proxy Vercel');
+          resolvedUrl = data.url;
         }
-      } catch (e) {
-        console.warn(`[YouTubeProvider] Falló stream en ${instance}:`, e.message);
       }
+    } catch (e) {
+      console.warn('[YouTubeProvider] Serverless proxy falló, intentando instancias directas...', e.message);
     }
 
-    // Intento 2: Backend o proxy serverless
+    // Intento 2: Consulta directa desde el navegador a instancias Piped públicas con CORS
     if (!resolvedUrl) {
-      try {
-        const proxyUrl = `/api/piped-proxy?id=${youtubeId}`;
-        const res = await fetchWithTimeout(proxyUrl, {}, 10000);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.url) resolvedUrl = data.url;
+      for (const instance of PIPED_INSTANCES) {
+        try {
+          const res = await fetchWithTimeout(`${instance}/streams/${youtubeId}`, {}, 6000);
+          if (res.ok) {
+            const data = await res.json();
+            const audioStreams = data.audioStreams || [];
+            if (audioStreams.length > 0) {
+              audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+              resolvedUrl = audioStreams[0].url;
+              if (resolvedUrl) {
+                console.log(`[YouTubeProvider] ✅ Stream resuelto en cliente via ${instance}`);
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[YouTubeProvider] Falló stream en ${instance}:`, e.message);
         }
-      } catch (e) {}
+      }
     }
 
     if (resolvedUrl) {
@@ -225,6 +229,7 @@ export const YouTubeProvider = {
 
     throw new Error('No se pudo obtener la URL del stream desde ninguna fuente');
   }
+
 };
 
 // ─────────────────────────────────────────────
