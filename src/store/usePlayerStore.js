@@ -515,6 +515,12 @@ export const usePlayerStore = create((set, get) => ({
   playSong: async (song) => {
     const { currentSong, playbackHistory, deviceId, activeDeviceId, isPlaying, transferPlayback, queue } = get();
 
+    // Reanudar contexto de audio en interacción
+    try {
+      const { resumeWebAudioContext } = await import('../services/player/audioNormalizer');
+      resumeWebAudioContext();
+    } catch (e) {}
+
     // NUEVO: Intentar obtener versión offline primero para reproducción inmediata y ahorro de red
     try {
       const { OfflineManager } = await import('../lib/offlineManager');
@@ -532,6 +538,7 @@ export const usePlayerStore = create((set, get) => ({
     } catch (offlineErr) {
       console.warn('[Player] Offline validation error:', offlineErr);
     }
+
 
     // LÓGICA DE CACHÉ INTELIGENTE (solo para recursos remotos locales)
     let playableUrl = song.url;
