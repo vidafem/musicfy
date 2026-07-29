@@ -70,7 +70,44 @@ export default function SearchPage() {
 
   useEffect(() => {
     loadExploreData();
+    // Cargar historial sincronizado desde Supabase
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('search_history')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (data && Array.isArray(data.search_history) && data.search_history.length > 0) {
+            setSearchHistory(data.search_history);
+            localStorage.setItem('musicfy_search_history', JSON.stringify(data.search_history));
+          }
+        }
+      } catch (e) {}
+    })();
   }, []);
+
+  const saveSearchTerm = async (term) => {
+    if (!term || !term.trim()) return;
+    const clean = term.trim();
+    const updated = [clean, ...searchHistory.filter(h => h.toLowerCase() !== clean.toLowerCase())].slice(0, 15);
+    setSearchHistory(updated);
+    localStorage.setItem('musicfy_search_history', JSON.stringify(updated));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ search_history: updated })
+          .eq('id', user.id);
+      }
+    } catch (e) {}
+  };
+
 
   const loadExploreData = async () => {
     try {

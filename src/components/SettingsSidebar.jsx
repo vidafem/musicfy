@@ -278,13 +278,14 @@ export default function SettingsSidebar({ isOpen, onClose }) {
 
           <div className="settings-section">
             <h3>Almacenamiento</h3>
-            <div className="setting-item action-item" onClick={clearCache}>
+            <div className="setting-item action-item" onClick={() => { clearCache(); onClose(); }}>
               <div className="setting-info">
                 <span style={{ color: '#ff4d4f' }}><Trash2 size={18} color="#ff4d4f"/> Limpiar Caché Musical</span>
                 <p>Libera espacio de almacenamiento eliminando portadas temporales y canciones pre-cargadas.</p>
               </div>
             </div>
           </div>
+
           
           {/* BOTÓN DE CIERRE DE SESIÓN MOVIDO ADENTRO DEL DESLIZABLE */}
           <div className="settings-section" style={{ marginTop: '30px', display: 'flex', justifyContent: 'center' }}>

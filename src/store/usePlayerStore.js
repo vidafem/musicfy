@@ -427,87 +427,40 @@ export const usePlayerStore = create((set, get) => ({
     if (!song) return;
     const { queue, autoplayProcessedId } = get();
     
-    // Evitar procesar el autoplay varias veces para la misma canción
     if (autoplayProcessedId === song.id) return;
     set({ autoplayProcessedId: song.id });
 
     const currentIndex = queue.findIndex(s => s.id === song.id);
     
-    // Solo cargamos autoplay si es la última canción de la cola o no está en la cola
+    // Cargar autoplay si estamos en la última canción de la cola o si es nueva
     if (currentIndex === -1 || currentIndex === queue.length - 1) {
-      console.log(`[Autoplay] Cargando música similar para: ${song.title} por ${song.artist}`);
+      console.log(`[Autoplay] Buscando recomendaciones dinámicas para: ${song.title} - ${song.artist}`);
       const existingIds = new Set(queue.map(s => s.id));
-      
-      if (song.source === 'youtube') {
-        try {
-          const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(song.artist)}&type=song`, {}, 15000);
-          if (res.ok) {
-            const data = await res.json();
-            const newSongs = (data.items || []).map(item => {
-              const yid = item.id.videoId;
-              return {
-                id: yid,
-                title: item.snippet.title,
-                artist: item.snippet.channelTitle,
-                cover_url: item.snippet.thumbnails?.high?.url || '',
-                url: null,
-                source: 'youtube',
-                youtube_id: yid,
-                is_external: true,
-                is_video: false
-              };
-            }).filter(s => s.id !== song.id && !existingIds.has(s.id)); // Evitar duplicar la actual y las existentes
-            
-            if (newSongs.length > 0) {
-              const updatedQueue = [...queue];
-              if (currentIndex === -1) {
-                updatedQueue.push(song);
-              }
-              updatedQueue.push(...newSongs.slice(0, 10)); // agregar 10 canciones similares
-              set({ queue: updatedQueue });
-              dbStore.set('queue', updatedQueue);
-              console.log(`[Autoplay] Agregadas ${newSongs.slice(0, 10).length} canciones de YouTube similares a la cola.`);
-            }
-          }
-        } catch (e) {
-          console.warn('[Autoplay] Error cargando canciones similares de YouTube:', e);
-        }
-      } else {
-        // Local
-        try {
-          let queryBuilder = supabase.from('songs').select('*');
-          if (song.artist && song.artist !== 'Artista Desconocido') {
-            queryBuilder = queryBuilder.eq('artist', song.artist);
-          } else if (song.genre) {
-            queryBuilder = queryBuilder.eq('genre', song.genre);
-          }
-          
-          const { data: matches } = await queryBuilder.limit(15);
-          let localSongs = (matches || [])
-            .map(s => ({ ...s, source: s.source || 'local', is_local: true }))
-            .filter(s => s.id !== song.id && !existingIds.has(s.id));
-            
-          if (localSongs.length === 0) {
-            // Fallback a cualquier canción local
-            const { data: anyLocal } = await supabase.from('songs').select('*').limit(10);
-            localSongs = (anyLocal || [])
-              .map(s => ({ ...s, source: s.source || 'local', is_local: true }))
-              .filter(s => s.id !== song.id && !existingIds.has(s.id));
-          }
+      if (song.youtube_id) existingIds.add(song.youtube_id);
 
-          if (localSongs.length > 0) {
-            const updatedQueue = [...queue];
-            if (currentIndex === -1) {
-              updatedQueue.push(song);
-            }
-            updatedQueue.push(...localSongs.slice(0, 10));
-            set({ queue: updatedQueue });
-            dbStore.set('queue', updatedQueue);
-            console.log(`[Autoplay] Agregadas ${localSongs.slice(0, 10).length} canciones locales similares a la cola.`);
+      try {
+        const { HybridMusicProvider } = await import('../providers/MusicProvider');
+        const searchTerms = song.artist && song.artist !== 'Artista Desconocido' ? `${song.artist} songs` : song.title;
+        const recommendations = await HybridMusicProvider.search(searchTerms, { includeExternal: true, limit: 12 });
+
+        const freshSongs = recommendations.filter(s => 
+          s.id !== song.id && 
+          !existingIds.has(s.id) && 
+          !existingIds.has(s.youtube_id)
+        );
+
+        if (freshSongs.length > 0) {
+          const updatedQueue = [...queue];
+          if (currentIndex === -1) {
+            updatedQueue.push(song);
           }
-        } catch (e) {
-          console.warn('[Autoplay] Error cargando canciones similares locales:', e);
+          updatedQueue.push(...freshSongs.slice(0, 8));
+          set({ queue: updatedQueue });
+          dbStore.set('queue', updatedQueue);
+          console.log(`[Autoplay] ✅ Agregadas ${freshSongs.slice(0, 8).length} canciones similares a la cola.`);
         }
+      } catch (e) {
+        console.warn('[Autoplay] Error cargando recomendaciones:', e);
       }
     }
   },
@@ -518,7 +471,12 @@ export const usePlayerStore = create((set, get) => ({
 
     const updatedAt = Date.now();
 
-    // 1. ESTADO SINCRÓNICO INMEDIATO: Garantiza que Mobile Safari / Chrome conserven el token táctil del usuario
+    // 1. Si no hay reproductor activo definido, asignar este dispositivo como maestro
+    if (!activeDeviceId) {
+      transferPlayback(deviceId);
+    }
+
+    // 2. Estado visual instantáneo
     set({
       currentSong: song,
       isPlaying: true,
@@ -526,22 +484,16 @@ export const usePlayerStore = create((set, get) => ({
       playbackUpdatedAt: updatedAt
     });
 
-    if (!activeDeviceId) {
-      transferPlayback(deviceId);
-    }
-
     if (currentSong && currentSong.id !== song.id) {
       set({ playbackHistory: [...playbackHistory, currentSong].slice(-50) });
     }
 
-    // 2. Resolver versión offline o URL de stream en segundo plano sin bloquear el toque inicial
+    // 3. Resolver URL de streaming reproducible
     let playableUrl = song.url;
     try {
       const { OfflineManager } = await import('../lib/offlineManager');
       const offlineUrl = await OfflineManager.getOfflineUrl(song.id);
-      if (offlineUrl) {
-        playableUrl = offlineUrl;
-      }
+      if (offlineUrl) playableUrl = offlineUrl;
     } catch (e) {}
 
     const isYouTube = song.source === 'youtube' || song.is_external || (song.url && (song.url.includes('googlevideo.com') || song.url.includes('youtube.com') || song.url.includes('youtu.be')));
@@ -554,7 +506,7 @@ export const usePlayerStore = create((set, get) => ({
         resolutionPromise.catch(() => {});
         playableUrl = await Promise.race([
           resolutionPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de resolución rápida (6s)')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout resolución (6s)')), 6000))
         ]);
       } catch (e) {
         console.warn('[Player] Stream resolution fallback to iframe:', e.message);
@@ -567,11 +519,10 @@ export const usePlayerStore = create((set, get) => ({
       } catch (e) {}
     }
 
-    // Si la URL resuelta es diferente, actualizar el objeto de la canción activa
     const updatedSong = { ...song, url: playableUrl };
     set({ currentSong: updatedSong });
 
-    // Guardar estado en IndexedDB y transmitir a Connect Pro
+    // Guardar estado en IDB y emitir comando Spotify Connect a la sala Realtime
     dbStore.set('currentSong', updatedSong);
     dbStore.set('queue', queue);
 
@@ -579,9 +530,10 @@ export const usePlayerStore = create((set, get) => ({
     get().sendCommand('PLAY_SONG', { song: updatedSong, updatedAt });
     get().saveRemotePlaybackState();
 
-    // Cargar autoplay en segundo plano
+    // Autoplay dinámico en segundo plano
     get().loadAutoplayNext(song);
   },
+
 
 
   togglePlay: () => {

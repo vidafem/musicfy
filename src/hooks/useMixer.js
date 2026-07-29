@@ -127,7 +127,7 @@ export function useMixer({
 
         if (!nextSongInfo && nextS) {
           if (nextS.id !== currentSong.id) {
-            console.log(`[Mixer] 🎵 Preparando canción entrante: ${nextS.title}`);
+            console.log(`[Mixer] 🎵 Preparando canción entrante para Crossfade: ${nextS.title}`);
             setNextSongInfo(nextS);
             setNextCurrentTime(0);
             setUiTransition(false);
@@ -139,12 +139,27 @@ export function useMixer({
               crossfadeTime: fadeSeconds,
               activeDeviceId: deviceId
             });
-            secAudio.src = nextS.url;
-            secAudio.currentTime = 0;
-            secAudio.volume = 0;
-            secAudio.play().catch(err => console.error("[Mixer] Error al reproducir canción entrante:", err));
+
+            (async () => {
+              let playableUrl = nextS.url;
+              if (!playableUrl || nextS.source === 'youtube' || nextS.youtube_id) {
+                try {
+                  const { HybridMusicProvider } = await import('../providers/MusicProvider');
+                  playableUrl = await HybridMusicProvider.getPlayableUrl(nextS);
+                } catch (e) {
+                  console.warn('[Mixer] Error resolviendo stream de canción entrante:', e);
+                }
+              }
+              if (secAudio && playableUrl && playableUrl !== 'youtube_iframe_fallback') {
+                secAudio.src = playableUrl;
+                secAudio.currentTime = 0;
+                secAudio.volume = 0;
+                secAudio.play().catch(err => console.error("[Mixer] Error al reproducir canción entrante:", err));
+              }
+            })();
           }
         }
+
 
         setNextCurrentTime(secAudio.currentTime || 0);
         if (secAudio.duration) setNextDuration(secAudio.duration);

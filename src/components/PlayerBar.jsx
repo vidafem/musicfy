@@ -381,19 +381,25 @@ export default function PlayerBar({ mobileDockMode = 'player', onMobileDockModeC
     const normalize = (url) => { try { return new URL(url).pathname + new URL(url).search; } catch { return url; } };
 
     const hasSongChanged = activeAudio.dataset.songId !== currentSong.id;
-    const hasUrlChanged = normalize(activeAudio.src) !== normalize(currentSong.url);
+    const hasUrlChanged = currentSong.url && normalize(activeAudio.src) !== normalize(currentSong.url);
 
     if (hasSongChanged || hasUrlChanged) {
       activeAudio.dataset.songId = currentSong.id;
-      if (hasUrlChanged) {
+      if (hasUrlChanged && currentSong.url) {
         activeAudio.src = currentSong.url;
       }
-      activeAudio.currentTime = 0; // Force time reset on song changes
-      if (isPlaying && activeDeviceId === deviceId) {
+
+      // Reinicio explícito de tiempo a 0:00 para ambas pistas
+      main.currentTime = 0;
+      sec.currentTime = 0;
+      setLocalCurrentTime(0);
+
+      if (isPlaying && activeDeviceId === deviceId && currentSong.url) {
         activeAudio.play().catch((err) => console.warn("[PlayerBar] play error:", err));
       }
     }
   }, [currentSong?.id, currentSong?.url, activeChannel, activeDeviceId, deviceId, isPlaying, useYtIframeAudio]);
+
 
   // Sincronizar PLAY/PAUSE
   useEffect(() => {
