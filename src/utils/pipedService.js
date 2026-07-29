@@ -51,7 +51,6 @@ export async function fetchFromPiped(path, options = {}) {
   try {
     // 1. Manejar consultas de búsqueda
     if (cleanPath.startsWith('/search')) {
-      // Extraer parámetro q y filter
       const urlParams = new URLSearchParams(cleanPath.split('?')[1] || '');
       const query = urlParams.get('q') || '';
       const filter = urlParams.get('filter') || '';
@@ -60,126 +59,91 @@ export async function fetchFromPiped(path, options = {}) {
       if (filter === 'music_videos') type = 'video';
       else if (filter === 'playlists') type = 'playlist';
       else if (filter === 'albums') type = 'album';
-      
-      console.log(`[PipedProxy] Redirigiendo búsqueda al backend para: "${query}", tipo: ${type}`);
-      
-      let data;
-      try {
-        const res = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&type=${type}`, { signal: options.signal }, 6000);
-        if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
-        data = await res.json();
-      } catch (backendErr) {
-        if (options.signal?.aborted) throw backendErr;
-        console.warn("[PipedProxy] Backend search failed or timed out, falling back to public Piped mirrors...", backendErr.message);
-        
-        const PIPED_INSTANCES = [
-          'https://pipedapi.kavin.rocks',
-          'https://pipedapi.tokhmi.xyz',
-          'https://pipedapi.moomoo.me',
-          'https://pipedapi.adminforge.de',
-          'https://api-piped.mha.fi'
-        ];
-        
-        const searchPromises = PIPED_INSTANCES.map(async (instance) => {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000);
-          
-          let signalListener;
-          if (options.signal) {
-            signalListener = () => controller.abort();
-            options.signal.addEventListener('abort', signalListener);
-          }
 
-          try {
-            const pipedFilter = type === 'song' ? 'songs' : (type === 'video' ? 'music_videos' : (type === 'playlist' ? 'playlists' : 'albums'));
-            const response = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&filter=${pipedFilter}`, {
-              headers: { Accept: 'application/json' },
-              signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (!response.ok) throw new Error(`Status ${response.status}`);
-            const result = await response.json();
-            if (result.items && result.items.length > 0) {
-              return result;
-            }
-            throw new Error('No items');
-          } catch (err) {
-            clearTimeout(timeoutId);
-            throw err;
-          } finally {
-            if (options.signal && signalListener) {
-              options.signal.removeEventListener('abort', signalListener);
-            }
-          }
-        });
+      const PIPED_INSTANCES = [
+        'https://api.piped.video',
+        'https://pipedapi.adminforge.de',
+        'https://pipedapi.colby.cloud',
+        'https://pipedapi.kavin.rocks'
+      ];
+      
+      const searchPromises = PIPED_INSTANCES.map(async (instance) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        
+        let signalListener;
+        if (options.signal) {
+          signalListener = () => controller.abort();
+          options.signal.addEventListener('abort', signalListener);
+        }
 
         try {
-          const publicData = await Promise.any(searchPromises);
-          
-          if (type === 'playlist' || type === 'album') {
-            return {
-              items: (publicData.items || []).map(item => ({
-                playlistId: item.playlistId,
-                title: item.title,
-                uploaderName: item.uploaderName || 'Artista Desconocido',
-                thumbnail: getHighResThumbnail(item.thumbnail),
-                trackCount: item.trackCount,
-                type: item.type
-              }))
-            };
+          const pipedFilter = type === 'song' ? 'songs' : (type === 'video' ? 'music_videos' : (type === 'playlist' ? 'playlists' : 'albums'));
+          const response = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&filter=${pipedFilter}`, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!response.ok) throw new Error(`Status ${response.status}`);
+          const result = await response.json();
+          const items = result.items || result;
+          if (Array.isArray(items) && items.length > 0) {
+            return { items };
           }
-          
+          throw new Error('No items');
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        } finally {
+          if (options.signal && signalListener) {
+            options.signal.removeEventListener('abort', signalListener);
+          }
+        }
+      });
+
+      try {
+        const publicData = await Promise.any(searchPromises);
+        
+        if (type === 'playlist' || type === 'album') {
           return {
             items: (publicData.items || []).map(item => ({
-              url: `/watch?v=${item.videoId}`,
+              playlistId: item.playlistId || item.id,
               title: item.title,
-              uploaderName: item.uploaderName,
+              uploaderName: item.uploaderName || item.channelTitle || 'Artista Desconocido',
               thumbnail: getHighResThumbnail(item.thumbnail),
-              duration: item.duration || 0
+              trackCount: item.trackCount || 0,
+              type: item.type || type
             }))
           };
-        } catch (anyErr) {
-          console.error("[PipedProxy] All public search fallbacks failed:", anyErr);
-          throw new Error("Servicio de búsqueda no disponible temporalmente.");
         }
-      }
-      
-      if (type === 'playlist' || type === 'album') {
+        
         return {
-          items: (data.items || []).map(item => ({
-            playlistId: item.playlistId,
-            title: item.title,
-            uploaderName: item.author || 'Artista Desconocido',
-            thumbnail: getHighResThumbnail(item.thumbnail),
-            trackCount: item.trackCount,
-            type: item.type
-          }))
+          items: (publicData.items || []).map(item => {
+            const videoId = item.videoId || item.id || (item.url ? item.url.replace('/watch?v=', '') : '');
+            return {
+              url: `/watch?v=${videoId}`,
+              title: item.title,
+              uploaderName: item.uploaderName || item.channelTitle || 'Artista Desconocido',
+              thumbnail: getHighResThumbnail(item.thumbnail),
+              duration: item.duration || 0
+            };
+          })
         };
+      } catch (anyErr) {
+        console.error("[PipedProxy] Falló la búsqueda multicanal:", anyErr);
+        return { items: [] };
       }
-      
-      // Mapear al formato que los componentes esperan de Piped (canciones/videos)
-      return {
-        items: (data.items || []).map(item => ({
-          url: `/watch?v=${item.id.videoId}`,
-          title: item.snippet.title,
-          uploaderName: item.snippet.channelTitle,
-          thumbnail: getHighResThumbnail(item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ''),
-          duration: 0
-        }))
-      };
     }
     
-    // 2. Manejar consultas de streaming
+    // 2. Manejar consultas de streaming usando Vercel Serverless Function
     if (cleanPath.startsWith('/streams/')) {
       const videoId = cleanPath.split('/').pop();
-      console.log(`[PipedProxy] Redirigiendo resolución de stream al backend para: ${videoId}`);
+      const proxyUrl = `/api/piped-proxy?id=${videoId}`;
       
-      const res = await fetchWithTimeout(`${BACKEND_URL}/stream?id=${videoId}`, { signal: options.signal }, 35000);
-      if (!res.ok) throw new Error(`Backend devolvió status ${res.status}`);
+      const res = await fetchWithTimeout(proxyUrl, { signal: options.signal }, 10000);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
       
       const data = await res.json();
-      
-      // Mapear al formato esperado por el reproductor
       return {
         audioStreams: [
           {
@@ -192,18 +156,15 @@ export async function fetchFromPiped(path, options = {}) {
       };
     }
     
-    // Ruta genérica
-    const res = await fetchWithTimeout(`${BACKEND_URL}${cleanPath}`, { signal: options.signal }, 20000);
-    return await res.json();
+    return { items: [] };
     
   } catch (err) {
-    if (err.name === 'AbortError') {
-      throw err;
-    }
-    console.error(`[PipedProxy] Error en proxy hacia backend para la ruta ${cleanPath}:`, err);
-    throw new Error(`Error en el servidor local de música: ${err.message}`);
+    if (err.name === 'AbortError') throw err;
+    console.error(`[PipedProxy] Error en proxy para ruta ${cleanPath}:`, err);
+    return { items: [], audioStreams: [] };
   }
 }
+
 
 /**
  * Retorna el endpoint de stream en el servidor local.
