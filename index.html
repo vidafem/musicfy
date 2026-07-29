@@ -23,13 +23,15 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('Musicfy PWA: Service Worker activo');
+            reg.update();
+            console.log('Musicfy PWA: Service Worker actualizado');
           }).catch(err => {
             console.log('Musicfy PWA: Error en SW', err);
           });
         });
       }
     </script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

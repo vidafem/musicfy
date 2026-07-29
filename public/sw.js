@@ -1,4 +1,4 @@
-const CACHE_NAME = 'musicfy-v2';
+const CACHE_NAME = 'musicfy-v5-force-reload';
 const ASSETS = [
   '/',
   '/index.html',
@@ -6,8 +6,9 @@ const ASSETS = [
   '/icon.png'
 ];
 
-// Instalar el Service Worker y cachear recursos básicos
+// Instalar el Service Worker y omitir la espera inmediatamente
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
@@ -15,75 +16,50 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activar y limpiar cachés antiguos
+// Activar y reclamar clientes inmediatamente borrando cachés antiguos
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Estrategia: Network First, falling back to Cache (solo para assets estáticos del mismo origen)
+// Network First para todas las peticiones JS/CSS para asegurar actualizaciones en tiempo real
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Solo interceptar peticiones del mismo origen (no APIs externas)
-  if (url.origin !== self.location.origin) {
-    return;
-  }
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/api')) return;
+  if (!event.request.url.startsWith('http')) return;
 
-  // 2. NUNCA interceptar rutas de API del backend
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/api')) {
-    return;
-  }
-
-  // 3. Ignorar esquemas que no sean http/https
-  if (!event.request.url.startsWith('http')) {
-    return;
-  }
-
-  // 4. Ignorar peticiones a servicios conocidos (por si acaso)
   if (
     event.request.url.includes('supabase') ||
     event.request.url.includes('piped') ||
     event.request.url.includes('invidious') ||
     event.request.url.includes('inv.') ||
-    event.request.url.includes('cobalt') ||
-    event.request.url.includes('r2') ||
     event.request.url.includes('googlevideo') ||
-    event.request.url.includes('workers.dev') ||
     event.request.url.includes('youtube')
   ) {
     return;
   }
 
-  // 5. Solo cachear assets estáticos (JS, CSS, imágenes, fuentes, HTML)
-  const isStaticAsset = url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|eot|json|html)$/i)
-    || url.pathname === '/'
-    || event.request.mode === 'navigate';
-
-  if (!isStaticAsset) {
-    return;
-  }
-
+  // Network first con fallback a cache
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (!response || response.status === 404) {
-          return caches.match(event.request).then((cached) => cached || response);
+        if (response && response.status === 200 && event.request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
       })
       .catch(async () => {
         const cachedResponse = await caches.match(event.request);
-        if (cachedResponse) {
-          return cachedResponse;
-        }
+        if (cachedResponse) return cachedResponse;
 
-        // Si es una petición de navegación (SPA), servir index.html del caché
         if (event.request.mode === 'navigate') {
           const indexCache = await caches.match('/index.html');
           if (indexCache) return indexCache;
@@ -91,7 +67,6 @@ self.addEventListener('fetch', (event) => {
 
         return new Response('Offline', {
           status: 503,
-          statusText: 'Service Unavailable',
           headers: { 'Content-Type': 'text/plain' }
         });
       })
